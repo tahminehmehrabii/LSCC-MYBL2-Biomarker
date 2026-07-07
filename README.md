@@ -16,7 +16,8 @@ This repository contains all the code necessary to reproduce the results.
 
 First, download the repository and place it in your project directory.
 
-git clone https://github.com/your-username/LSCCMYBL2.git path/to/directory
+```bash
+git clone https://github.com/your-username/LSCC-MYBL2-Biomarkers.git path/to/directory
 
 In this command, "path/to/directory" refers to your project path.
 
