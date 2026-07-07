@@ -10,7 +10,7 @@ Codes: contains the R scripts to reproduce all analyses.
 
 Results: contains all the results produced by the R scripts.
 
-Reproducing the results
+# Reproducing the results
 
 This repository contains all the code necessary to reproduce the results.
 
