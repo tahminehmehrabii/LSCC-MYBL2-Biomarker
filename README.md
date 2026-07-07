@@ -2,7 +2,7 @@
 
 ## Overview
 
-This github repository contains the data files and analysis code used for the scientific paper titled "Integrative bulk and single-cell transcriptomic analysis identifies MYBL2-associated molecular and immune features in laryngeal squamous cell carcinoma". The files are organised into three folders:
+This github repository contains the data files and analysis code used for the scientific paper titled "MYBL2-Associated Malignant Heterogeneity and Cell–Cell Communication Revealed by Machine Learning–Integrated Transcriptomic Analysis in Laryngeal Squamous Cell Carcinoma". The files are organised into three folders:
 
 Data: which contains all the transcriptomic data required to perform the analyses.
 
