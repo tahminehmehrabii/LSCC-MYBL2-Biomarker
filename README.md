@@ -50,86 +50,29 @@ setwd(project_path)
 
 ## Required software
 
-The scripts use core R functionality and several publicly available R packages listed below. Version numbers in brackets correspond to the approximate package versions that were used to develop, test, and debug these scripts.
+The scripts use core R functionality and several publicly available R packages listed below. 
+limma (3.62.2)
 
-R (4.4.3)
+WGCNA (1.74)
 
-RStudio (2024.12.0+467): Optional, testing functions and running the code step-by-step.
+Seurat (5.5.0)
 
-Seurat (5.1.0)
+harmony (1.2.4)
 
-SeuratObject (5.0.2)
+glmnet (4.1.10)
 
-Matrix (1.7.0)
+pROC (1.19.0.1)
 
-data.table (1.16.0)
+e1071 (1.7-17)
 
-dplyr (1.1.4)
+randomForest (4.7-1.2)
 
-tidyr (1.3.1)
+GSVA (2.0.7)
 
-tibble (3.2.1)
+IOBR (2.2.3)
 
-stringr (1.5.1)
+fgsea (1.32.4)
 
-ggplot2 (3.5.1)
+Monocle 2 (2.34.0)
 
-patchwork (1.2.0)
-
-pheatmap (1.0.12)
-
-ggrepel (0.9.5)
-
-harmony (1.2.0)
-
-infercnv (1.20.0)
-
-limma (3.60.0)
-
-edgeR (4.2.0)
-
-WGCNA (1.72.5)
-
-impute (1.78.0)
-
-glmnet (4.1.8)
-
-pROC (1.18.5)
-
-randomForest (4.7.1.1)
-
-e1071 (1.7.14)
-
-clusterProfiler (4.12.0)
-
-msigdbr (7.5.1)
-
-fgsea (1.30.0)
-
-GSVA (1.52.0)
-
-IOBR (0.99.9)
-
-readxl (1.4.3)
-
-CellChat (2.1.2)
-
-igraph (2.0.3)
-
-Biobase (2.64.0)
-
-Monocle (2.34.0)
-
-DDRTree (0.1.5)
-
-VGAM (1.1.11)
-
-scales (1.3.0)
-
-cowplot (1.1.3)
-
-magick (2.8.5)
-
-png (0.1.8)
-
-grid (4.4.3)
+CellChat (2.2.0.9001)
