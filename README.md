@@ -2,7 +2,7 @@
 
 ## Overview
 
-This github repository contains the data files and analysis code used for the scientific paper titled "MYBL2-Associated Malignant Heterogeneity and Cell–Cell Communication Revealed by Machine Learning–Integrated Transcriptomic Analysis in Laryngeal Squamous Cell Carcinoma". The files are organised into three folders:
+This github repository contains the data files and analysis code used for the scientific paper titled "Integrated single-cell and bulk RNA-seq analysis identifies MYBL2-associated malignant heterogeneity and cell–cell communication in laryngeal squamous cell carcinoma". The files are organised into three folders:
 
 Data: which contains all the transcriptomic data required to perform the analyses.
 
