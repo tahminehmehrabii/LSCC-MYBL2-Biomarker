@@ -1,78 +1,102 @@
-# LSCC-MYBL2-Biomarker
+LSCC MYBL2 reproducible analysis
 
-## Overview
+This repository contains the R code used for the single-cell, bulk-transcriptomic, machine-learning, immune, functional, trajectory, and reviewer-requested sensitivity analyses of MYBL2 in lung squamous cell carcinoma (LSCC).
 
-This github repository contains the data files and analysis code used for the scientific paper titled "Integrated single-cell and bulk RNA-seq analysis identifies MYBL2-associated malignant heterogeneity and cell–cell communication in laryngeal squamous cell carcinoma". The files are organised into three folders:
+Repository structure
 
-Data: which contains all the transcriptomic data required to perform the analyses.
+LSCC_MYBL2_Reproducible_Code/
+├── README.md
+├── requirements.R
+├── config/
+│   └── paths.example.R
+└── scripts/
+    ├── 01_scRNAseq_high_CNV_marker_analysis.R
+    ├── 02_bulk_RNAseq_ML_pipeline.R
+    ├── 03_immune_microenvironment_analysis.R
+    ├── 04_functional_programme_analysis.R
+    ├── 05_MYBL2_continuous_Hallmark_GSEA.R
+    ├── 06_cluster_signature_ssGSEA_validation.R
+    ├── 07_CellChat_clusters_0_8.R
+    ├── 08_prepare_Monocle2_input.R
+    ├── 09_Monocle2_pseudotime_analysis.R
+    ├── 10_marker_threshold_sensitivity.R
+    ├── 11_WGCNA_beta_sensitivity.R
+    ├── 12_multiseed_stability_analysis.R
+    ├── 13_multigene_panel_benchmark.R
+    ├── 14_RF_vs_SVM_DeLong_test.R
+    ├── 15_established_biomarker_benchmark.R
+    └── 16_purity_adjusted_immune_sensitivity.R
 
-Codes: contains the R scripts to reproduce all analyses.
+Main workflow
 
-Results: contains all the results produced by the R scripts.
+Run the main analyses in the following order:
 
-## Reproducing the results
+01_scRNAseq_high_CNV_marker_analysis.R: Seurat processing, cell annotation, inferCNV, malignant-cell identification, and high-CNV marker detection.
 
-This repository contains all the code necessary to reproduce the results.
+02_bulk_RNAseq_ML_pipeline.R: bulk RNA-seq preprocessing, differential expression, WGCNA, single-cell/bulk/WGCNA integration, LASSO selection, internal ROC analysis, and external machine-learning validation.
 
-First, download the repository and place it in your project directory.
+03_immune_microenvironment_analysis.R: ssGSEA and ESTIMATE analyses of the MYBL2-associated immune microenvironment.
 
-```bash
-git clone https://github.com/tahminehmehrabii/LSCC-MYBL2-Biomarker.git path/to/directory
-```
+04_functional_programme_analysis.R: functional-programme scoring of high-CNV malignant subclusters.
 
-In this command, "path/to/directory" refers to your project path.
+05_MYBL2_continuous_Hallmark_GSEA.R: MYBL2-continuous Hallmark GSEA in bulk tumor samples.
 
-Then, run the following commands in order.
+06_cluster_signature_ssGSEA_validation.R: bulk validation of Cluster 0 and Cluster 8 single-cell signatures.
 
-Before running the code, make sure to set the project path using the setwd() command at the beginning of each code.
+07_CellChat_clusters_0_8.R: CellChat analysis of outgoing signaling from malignant Clusters 0 and 8.
 
-```r
-setwd(project_path)
-```
+08_prepare_Monocle2_input.R: preparation of balanced Monocle 2 input from the saved high-CNV Seurat objects.
 
-1. Run scRNAseqAnalysis.R to process the single-cell RNA-seq dataset, perform quality control, normalization, dimensionality reduction, Harmony integration, clustering, cell-type annotation, malignant epithelial cell identification, and inferCNV analysis.
+09_Monocle2_pseudotime_analysis.R: Monocle 2 DDRTree trajectory and MYBL2 pseudotime analysis.
 
-2. Run bulkRNAseqML.R to process the bulk RNA-seq datasets, prepare expression matrices, perform differential expression analysis, identify MYBL2-associated genes, and evaluate diagnostic performance using machine learning models.
+Reviewer-requested analyses
 
-3. Run immuneMicroenvironmentAnalysis.R to assess immune cell infiltration in LSCC and evaluate the association between MYBL2 expression and immune microenvironment features.
+10_marker_threshold_sensitivity.R: permissive, primary, and stringent single-cell marker definitions followed by repeated bulk-DEG and WGCNA intersections.
 
-4. Run functionalProgrammeAnalysis.R to investigate functional programme activity in High-CNV malignant epithelial subclusters and compare MYBL2-related biological programmes across malignant subtypes.
+11_WGCNA_beta_sensitivity.R: WGCNA network stability across alternative soft-threshold powers.
 
-5. Run pseudotimeInputPreparation.R to prepare the required High-CNV malignant epithelial cell input object for Monocle 2 pseudotime analysis.
+12_multiseed_stability_analysis.R: stability of feature selection and model performance across sampling seeds.
 
-6. Run pseudotimeMonocleAnalysis.R to perform Monocle 2 DDRTree pseudotime analysis and evaluate MYBL2 expression dynamics along the malignant-cell trajectory.
+13_multigene_panel_benchmark.R: comparison of MYBL2, other LASSO-selected genes, and a five-gene logistic model.
 
-7. Run clusterSignatureValidation.R to construct scRNA-seq-derived signatures for High-CNV malignant Cluster 0 and Cluster 8 and validate these signatures in bulk LSCC cohorts using ssGSEA.
+14_RF_vs_SVM_DeLong_test.R: paired DeLong comparison of external RF and SVM AUROCs.
 
-8. Run MYBL2HallmarkGSEA.R to perform MYBL2-continuous Hallmark gene set enrichment analysis in bulk tumor samples.
+15_established_biomarker_benchmark.R: comparison of MYBL2 with CDKN2A, EGFR, and MKI67.
 
-9. Run CellChatAnalysis.R to assess ligand-receptor communication from High-CNV malignant Cluster 0 and Cluster 8 to selected tumor microenvironment cell populations.
+16_purity_adjusted_immune_sensitivity.R: tumor-purity and dataset-adjusted immune sensitivity analyses.
 
-## Required software
+Configuration
 
-The scripts use core R functionality and several publicly available R packages listed below. 
-limma (3.62.2)
+The original analyses were run on Windows and use absolute paths under D:/LSCC or E:/LSCC. Before running the scripts:
 
-WGCNA (1.74)
+Copy config/paths.example.R to config/paths.R.
 
-Seurat (5.5.0)
+Edit the project paths for the local system.
 
-harmony (1.2.4)
+Update the path block at the beginning of each analysis script to match config/paths.R.
 
-glmnet (4.1.10)
+Absolute paths are retained in the scripts to preserve the exact provenance of the reported analysis. No raw or processed patient-level data are included in this code repository.
 
-pROC (1.19.0.1)
+Software
 
-e1071 (1.7-17)
+The trajectory workflow was developed for R 4.4.3 and Monocle 2.34.0. Other scripts should be run with the package versions reported by their generated sessionInfo.txt files. Run requirements.R to identify missing packages; it does not install packages automatically.
 
-randomForest (4.7-1.2)
+Reproducibility notes
 
-GSVA (2.0.7)
+Random seeds are set explicitly in stochastic analyses.
 
-IOBR (2.2.3)
+Training-derived model directions, scaling parameters, and decision thresholds are applied unchanged to validation and external cohorts.
 
-fgsea (1.32.4)
+Validation and external cohorts are not used for model fitting.
 
-Monocle 2 (2.34.0)
+Multiple-testing correction is performed with the Benjamini–Hochberg procedure where specified.
 
-CellChat (2.2.0.9001)
+Reviewer sensitivity analyses write to separate output directories and do not overwrite the primary analysis.
+
+Data availability
+
+The scripts expect the input matrices, phenotype tables, annotation files, gene-order file, and saved intermediate RDS objects described in their path sections. Public accession identifiers used in the workflow include GSE127165, GSE142083, GSE130605, and GSE206332.
+
+Citation
+
+If the code is released with the associated article, cite the final published article and the repository release or DOI.
