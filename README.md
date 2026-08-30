@@ -13,33 +13,6 @@ The workflow integrates:
 - Trajectory inference
 - Sensitivity and benchmark analyses
 
-## Repository Structure
-
-```text
-LSCC_MYBL2_Reproducible_Code/
-├── README.md
-├── requirements.R
-├── config/
-│   └── paths.example.R
-└── scripts/
-    ├── 01_scRNAseq_high_CNV_marker_analysis.R
-    ├── 02_bulk_RNAseq_ML_pipeline.R
-    ├── 03_immune_microenvironment_analysis.R
-    ├── 04_functional_programme_analysis.R
-    ├── 05_MYBL2_continuous_Hallmark_GSEA.R
-    ├── 06_cluster_signature_ssGSEA_validation.R
-    ├── 07_CellChat_clusters_0_8.R
-    ├── 08_prepare_Monocle2_input.R
-    ├── 09_Monocle2_pseudotime_analysis.R
-    ├── 10_marker_threshold_sensitivity.R
-    ├── 11_WGCNA_beta_sensitivity.R
-    ├── 12_multiseed_stability_analysis.R
-    ├── 13_multigene_panel_benchmark.R
-    ├── 14_RF_vs_SVM_DeLong_test.R
-    ├── 15_established_biomarker_benchmark.R
-    └── 16_purity_adjusted_immune_sensitivity.R
-```
-
 ## Main Analysis Workflow
 
 Run the primary analyses in the following order.
