@@ -1,5 +1,7 @@
 # LSCC MYBL2 Reproducible Analysis
 
+This repository contains analysis scripts used in the study:
+
 This repository contains the **R code** used for the reproducible analysis of **MYBL2 in lung squamous cell carcinoma (LSCC)**.
 
 ## Main Analysis Workflow
