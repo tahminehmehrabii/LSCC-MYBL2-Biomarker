@@ -1,8 +1,8 @@
-LSCC MYBL2 reproducible analysis
+LSCC MYBL2 Reproducible Analysis
 
-This repository contains the R code used for the single-cell, bulk-transcriptomic, machine-learning, immune, functional, trajectory, and reviewer-requested sensitivity analyses of MYBL2 in lung squamous cell carcinoma (LSCC).
+This repository contains the R code used for the reproducible analysis of MYBL2 in lung squamous cell carcinoma (LSCC). The workflow integrates single-cell RNA sequencing, bulk transcriptomics, machine learning, immune-microenvironment profiling, functional-programme analysis, cell–cell communication, trajectory inference, and sensitivity analyses.
 
-Repository structure
+Repository Structure
 
 LSCC_MYBL2_Reproducible_Code/
 ├── README.md
@@ -27,76 +27,108 @@ LSCC_MYBL2_Reproducible_Code/
     ├── 15_established_biomarker_benchmark.R
     └── 16_purity_adjusted_immune_sensitivity.R
 
-Main workflow
+Main Analysis Workflow
 
-Run the main analyses in the following order:
+Run the primary analyses in the following order:
 
-01_scRNAseq_high_CNV_marker_analysis.R: Seurat processing, cell annotation, inferCNV, malignant-cell identification, and high-CNV marker detection.
+01_scRNAseq_high_CNV_marker_analysis.R
+Performs Seurat processing, cell-type annotation, inferCNV analysis, malignant-cell identification, and high-CNV marker detection.
 
-02_bulk_RNAseq_ML_pipeline.R: bulk RNA-seq preprocessing, differential expression, WGCNA, single-cell/bulk/WGCNA integration, LASSO selection, internal ROC analysis, and external machine-learning validation.
+02_bulk_RNAseq_ML_pipeline.R
+Performs bulk RNA-seq preprocessing, differential-expression analysis, WGCNA, integration of single-cell, bulk, and WGCNA results, LASSO feature selection, internal ROC analysis, and external machine-learning validation.
 
-03_immune_microenvironment_analysis.R: ssGSEA and ESTIMATE analyses of the MYBL2-associated immune microenvironment.
+03_immune_microenvironment_analysis.R
+Characterizes the MYBL2-associated immune microenvironment using ssGSEA and ESTIMATE.
 
-04_functional_programme_analysis.R: functional-programme scoring of high-CNV malignant subclusters.
+04_functional_programme_analysis.R
+Scores functional programmes across high-CNV malignant-cell subclusters.
 
-05_MYBL2_continuous_Hallmark_GSEA.R: MYBL2-continuous Hallmark GSEA in bulk tumor samples.
+05_MYBL2_continuous_Hallmark_GSEA.R
+Performs Hallmark GSEA using continuous MYBL2 expression in bulk tumor samples.
 
-06_cluster_signature_ssGSEA_validation.R: bulk validation of Cluster 0 and Cluster 8 single-cell signatures.
+06_cluster_signature_ssGSEA_validation.R
+Validates the single-cell signatures of malignant Clusters 0 and 8 in bulk transcriptomic cohorts.
 
-07_CellChat_clusters_0_8.R: CellChat analysis of outgoing signaling from malignant Clusters 0 and 8.
+07_CellChat_clusters_0_8.R
+Analyzes outgoing cell–cell signaling from malignant Clusters 0 and 8 using CellChat.
 
-08_prepare_Monocle2_input.R: preparation of balanced Monocle 2 input from the saved high-CNV Seurat objects.
+08_prepare_Monocle2_input.R
+Prepares balanced Monocle 2 input from the saved high-CNV Seurat objects.
 
-09_Monocle2_pseudotime_analysis.R: Monocle 2 DDRTree trajectory and MYBL2 pseudotime analysis.
+09_Monocle2_pseudotime_analysis.R
+Performs Monocle 2 DDRTree trajectory inference and evaluates MYBL2 expression across pseudotime.
 
-Reviewer-requested analyses
+Sensitivity and Benchmark Analyses
 
-10_marker_threshold_sensitivity.R: permissive, primary, and stringent single-cell marker definitions followed by repeated bulk-DEG and WGCNA intersections.
+The following scripts assess the robustness, stability, and comparative performance of the main findings:
 
-11_WGCNA_beta_sensitivity.R: WGCNA network stability across alternative soft-threshold powers.
+10_marker_threshold_sensitivity.R — Evaluates permissive, primary, and stringent single-cell marker definitions, followed by repeated intersections with bulk DEGs and WGCNA modules.
 
-12_multiseed_stability_analysis.R: stability of feature selection and model performance across sampling seeds.
+11_WGCNA_beta_sensitivity.R — Assesses WGCNA network stability across alternative soft-thresholding powers.
 
-13_multigene_panel_benchmark.R: comparison of MYBL2, other LASSO-selected genes, and a five-gene logistic model.
+12_multiseed_stability_analysis.R — Evaluates the stability of feature selection and model performance across multiple random seeds.
 
-14_RF_vs_SVM_DeLong_test.R: paired DeLong comparison of external RF and SVM AUROCs.
+13_multigene_panel_benchmark.R — Compares MYBL2 with other LASSO-selected genes and a five-gene logistic model.
 
-15_established_biomarker_benchmark.R: comparison of MYBL2 with CDKN2A, EGFR, and MKI67.
+14_RF_vs_SVM_DeLong_test.R — Performs a paired DeLong test comparing external random-forest and support-vector-machine AUROCs.
 
-16_purity_adjusted_immune_sensitivity.R: tumor-purity and dataset-adjusted immune sensitivity analyses.
+15_established_biomarker_benchmark.R — Benchmarks MYBL2 against the established biomarkers CDKN2A, EGFR, and MKI67.
+
+16_purity_adjusted_immune_sensitivity.R — Performs tumor-purity- and dataset-adjusted immune sensitivity analyses.
 
 Configuration
 
-The original analyses were run on Windows and use absolute paths under D:/LSCC or E:/LSCC. Before running the scripts:
+The original analyses were run on Windows using absolute paths under D:/LSCC and E:/LSCC. Before running the scripts:
 
 Copy config/paths.example.R to config/paths.R.
 
-Edit the project paths for the local system.
+Edit config/paths.R to define the project paths for your local system.
 
-Update the path block at the beginning of each analysis script to match config/paths.R.
+Update the path block at the beginning of each analysis script to match the configured paths.
 
-Absolute paths are retained in the scripts to preserve the exact provenance of the reported analysis. No raw or processed patient-level data are included in this code repository.
+Absolute paths are retained in the scripts to preserve the provenance of the reported analyses. No raw or processed patient-level data are included in this repository.
 
-Software
+Software Requirements
 
-The trajectory workflow was developed for R 4.4.3 and Monocle 2.34.0. Other scripts should be run with the package versions reported by their generated sessionInfo.txt files. Run requirements.R to identify missing packages; it does not install packages automatically.
+The trajectory workflow was developed using R 4.4.3 and Monocle 2.34.0.
 
-Reproducibility notes
+Other scripts should be run with the package versions recorded in their generated sessionInfo.txt files.
 
-Random seeds are set explicitly in stochastic analyses.
+Run requirements.R to identify missing packages. The script reports missing dependencies but does not install them automatically.
 
-Training-derived model directions, scaling parameters, and decision thresholds are applied unchanged to validation and external cohorts.
+Reproducibility
+
+Random seeds are set explicitly for stochastic analyses.
+
+Model directions, scaling parameters, and decision thresholds derived from the training cohort are applied unchanged to validation and external cohorts.
 
 Validation and external cohorts are not used for model fitting.
 
-Multiple-testing correction is performed with the Benjamini–Hochberg procedure where specified.
+Multiple-testing correction uses the Benjamini–Hochberg procedure where specified.
 
-Reviewer sensitivity analyses write to separate output directories and do not overwrite the primary analysis.
+Sensitivity analyses write to separate output directories and do not overwrite the primary results.
 
-Data availability
+Data Availability
 
-The scripts expect the input matrices, phenotype tables, annotation files, gene-order file, and saved intermediate RDS objects described in their path sections. Public accession identifiers used in the workflow include GSE127165, GSE142083, GSE130605, and GSE206332.
+The scripts require the input matrices, phenotype tables, annotation files, gene-order file, and intermediate RDS objects specified in their path sections. These data are not distributed with this repository.
+
+Public datasets used in the workflow are available under the following accession identifiers:
+
+GSE127165
+
+GSE142083
+
+GSE130605
+
+GSE206332
 
 Citation
 
-If the code is released with the associated article, cite the final published article and the repository release or DOI.
+If you use this code, please cite the associated article. Full citation details will be added upon publication.
+
+License
+
+Please refer to the repository license for terms of reuse and distribution.
+
+
+
