@@ -191,7 +191,6 @@ Before running the scripts:
 
 Absolute paths are retained in the scripts to preserve the provenance of the reported analyses.
 
-> **Important:** No raw or processed patient-level data are included in this repository.
 
 ## Software Requirements
 
