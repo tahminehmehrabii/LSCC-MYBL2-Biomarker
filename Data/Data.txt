@@ -1,5 +1,3 @@
-This Google Drive folder contains the datasets used in this study.
-https://drive.google.com/drive/folders/1jRhmMy3ZCGw3f3qp-qf4qznDRmgQlWwA?usp=drive_link
 
 1. GSE127165: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE127165
 2. GSE142083: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE142083
