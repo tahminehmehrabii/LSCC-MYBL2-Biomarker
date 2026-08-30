@@ -1,7 +1,8 @@
+# LSCC MYBL2-continuous Hallmark GSEA
+# Uses limma-derived gene-level statistics and pre-ranked fgsea in bulk tumors.
 
-# STEP 01: Setup.
 rm(list = ls(all.names = TRUE))
-invisible(gc())
+gc()
 
 set.seed(123)
 
@@ -12,7 +13,8 @@ options(
   width = 160
 )
 
-# STEP 02: Set paths and parameters.
+# Step 1: version check, paths, and analytical settings
+
 if (as.character(getRversion()) != "4.4.3") {
   stop(
     "Run this script only in R 4.4.3. Current R version: ",
@@ -43,6 +45,7 @@ DEVELOPMENT_CPM_CANDIDATES <- c(
   )
 )
 
+# Pre-ranked GSEA settings
 MIN_GENE_SET_SIZE <- 10L
 MAX_GENE_SET_SIZE <- 500L
 FDR_CUTOFF <- 0.05
@@ -55,61 +58,88 @@ FOCUS_HALLMARK_PATHWAYS <- c(
   "HALLMARK_MYC_TARGETS_V1"
 )
 
+# Output files
 MYBL2_ASSOCIATION_CSV <- file.path(
   OUTPUT_DIR,
-  "mybl2_assoc.csv"
+  "MYBL2_limma_batch_adjusted_gene_association.csv"
 )
 
 HALLMARK_GMT <- file.path(
   OUTPUT_DIR,
-  "hallmark.gmt"
+  "Hallmark_gene_sets_used_LimmaBatchAdjusted.gmt"
 )
 
 HALLMARK_GENESET_CSV <- file.path(
   OUTPUT_DIR,
-  "hallmark_genes.csv"
+  "Hallmark_gene_sets_used_LimmaBatchAdjusted.csv"
 )
 
 GSEA_RESULTS_CSV <- file.path(
   OUTPUT_DIR,
-  "gsea_results.csv"
+  "MYBL2_limma_batch_adjusted_Hallmark_GSEA_results.csv"
 )
 
 GSEA_LEADING_EDGE_CSV <- file.path(
   OUTPUT_DIR,
-  "leading_edge.csv"
+  "MYBL2_limma_batch_adjusted_Hallmark_GSEA_leading_edge_genes.csv"
 )
 
 FOCUS_PATHWAYS_CSV <- file.path(
   OUTPUT_DIR,
-  "focus_pathways.csv"
+  "MYBL2_limma_batch_adjusted_Hallmark_focus_pathways.csv"
 )
 
 TUMOR_SAMPLE_METADATA_CSV <- file.path(
   OUTPUT_DIR,
-  "tumor_meta.csv"
+  "MYBL2_limma_batch_adjusted_tumor_samples.csv"
+)
+
+PROVENANCE_TXT <- file.path(
+  OUTPUT_DIR,
+  "MYBL2_limma_batch_adjusted_input_provenance.txt"
+)
+
+SUMMARY_TXT <- file.path(
+  OUTPUT_DIR,
+  "MYBL2_limma_batch_adjusted_summary.txt"
+)
+
+STATUS_TXT <- file.path(
+  OUTPUT_DIR,
+  "MYBL2_limma_batch_adjusted_status.txt"
+)
+
+SESSION_TXT <- file.path(
+  OUTPUT_DIR,
+  "MYBL2_limma_batch_adjusted_sessionInfo.txt"
+)
+
+RUN_LOG <- file.path(
+  OUTPUT_DIR,
+  "MYBL2_limma_batch_adjusted_run.log"
 )
 
 RESULT_RDS <- file.path(
   OUTPUT_DIR,
-  "gsea_obj.rds"
+  "MYBL2_limma_batch_adjusted_analysis_objects.rds"
 )
 
-GSEA_FIGURE_STEM <- (
-  "fig_gsea_overview"
+SUMMARY_FIGURE_STEM <- (
+  "Figure_MYBL2_continuous_Hallmark_GSEA_summary"
 )
 
 CURVE_FIGURE_STEM <- (
-  "fig_gsea_curves"
+  "Figure_MYBL2_continuous_Hallmark_GSEA_enrichment_curves"
 )
 
-# STEP 03: Set figure style.
+# Step 2: figure settings
+
 FONT_FAMILY <- "Arial"
 FIG_DPI <- 600L
 FIG_BACKGROUND <- "white"
 
-GSEA_FIGURE_W <- 10.60
-GSEA_FIGURE_H <- 8.20
+SUMMARY_FIGURE_W <- 10.60
+SUMMARY_FIGURE_H <- 8.20
 
 CURVE_FIGURE_W <- 12.20
 CURVE_FIGURE_H <- 9.10
@@ -129,6 +159,8 @@ GRID_LWD <- 0.30
 COL_NEGATIVE <- "#355C7D"
 COL_POSITIVE <- "#C95B74"
 
+# Enrichment-curve palette:
+# cobalt blue, crimson red, forest green, and amber.
 CURVE_PATHWAY_COLORS <- c(
   "HALLMARK_E2F_TARGETS" = "#1F5AA6",
   "HALLMARK_G2M_CHECKPOINT" = "#C62828",
@@ -160,7 +192,8 @@ if (.Platform$OS.type == "windows") {
   )
 }
 
-# STEP 04: Load packages.
+# Step 3: package check and loading
+
 required_packages <- c(
   "data.table",
   "dplyr",
@@ -203,7 +236,23 @@ suppressPackageStartupMessages({
   library(limma)
 })
 
-# STEP 05: Define helper functions.
+# Step 4: general helper functions
+
+log_message <- function(...) {
+  text <- paste0(..., collapse = "")
+  message(text)
+
+  cat(
+    format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    " | ",
+    text,
+    "\n",
+    file = RUN_LOG,
+    append = TRUE,
+    sep = ""
+  )
+}
+
 theme_manuscript <- function(show_grid = FALSE,
                              legend_position = "right") {
   ggplot2::theme_bw(
@@ -310,10 +359,11 @@ make_custom_enrichment_plot <- function(pathway_genes,
                                         result_row,
                                         line_color,
                                         panel_tag = NULL) {
+  # Preserve gene names before coercion: as.numeric() removes vector names.
   gene_names <- names(ranked_stats)
   ranked_stats <- as.numeric(ranked_stats)
   names(ranked_stats) <- gene_names
-  
+
   if (length(ranked_stats) < 2L ||
       is.null(gene_names) ||
       length(gene_names) != length(ranked_stats) ||
@@ -321,10 +371,10 @@ make_custom_enrichment_plot <- function(pathway_genes,
       any(!nzchar(gene_names))) {
     stop("The ranked statistic must be a named numeric vector.")
   }
-  
+
   pathway_genes <- unique(toupper(as.character(pathway_genes)))
   hit_index <- which(gene_names %in% pathway_genes)
-  
+
   if (length(hit_index) < MIN_GENE_SET_SIZE) {
     stop(
       "Too few ranked genes overlap ",
@@ -332,56 +382,58 @@ make_custom_enrichment_plot <- function(pathway_genes,
       " to draw the enrichment curve."
     )
   }
-  
+
+  # Weighted running enrichment score used for visualization.
   hit_weight <- abs(ranked_stats[hit_index])
   hit_weight[!is.finite(hit_weight)] <- 0
-  
+
   if (sum(hit_weight) <= 0) {
     hit_weight <- rep(1, length(hit_index))
   }
-  
+
   increment <- numeric(length(ranked_stats))
   increment[hit_index] <- hit_weight / sum(hit_weight)
-  
+
   miss_count <- length(ranked_stats) - length(hit_index)
   if (miss_count > 0L) {
     increment[-hit_index] <- -1 / miss_count
   }
-  
+
   running_score <- cumsum(increment)
-  
+
   curve_data <- data.frame(
     Rank = seq_along(ranked_stats),
     Running_score = running_score,
     stringsAsFactors = FALSE
   )
-  
+
   y_range <- range(running_score, finite = TRUE)
   y_span <- diff(y_range)
-  
+
   if (!is.finite(y_span) || y_span <= 0) {
     y_span <- max(abs(y_range), 1) * 0.25
   }
-  
+
+  # Compact gene-hit strip below the baseline.
   rug_bottom <- y_range[1] - 0.105 * y_span
   rug_top <- y_range[1] - 0.030 * y_span
-  
+
   peak_rank <- if (as.numeric(result_row$NES[1]) >= 0) {
     which.max(running_score)
   } else {
     which.min(running_score)
   }
-  
+
   annotation <- paste0(
     "NES = ",
     sprintf("%.2f", as.numeric(result_row$NES[1])),
     "\n",
     format_fdr(as.numeric(result_row$padj[1]))
   )
-  
+
   annotation_x <- max(curve_data$Rank) * 0.055
   annotation_y <- y_range[2] - 0.055 * y_span
-  
+
   ggplot2::ggplot(curve_data, ggplot2::aes(x = Rank, y = Running_score)) +
     ggplot2::geom_hline(
       yintercept = 0,
@@ -490,22 +542,22 @@ save_plot_all_formats <- function(plot_object,
     filename_stem,
     ignore.case = TRUE
   )
-  
+
   png_file <- file.path(
     OUTPUT_DIR,
     paste0(filename_stem, ".png")
   )
-  
+
   tiff_file <- file.path(
     OUTPUT_DIR,
     paste0(filename_stem, ".tiff")
   )
-  
+
   pdf_file <- file.path(
     OUTPUT_DIR,
     paste0(filename_stem, ".pdf")
   )
-  
+
   ggplot2::ggsave(
     filename = png_file,
     plot = plot_object,
@@ -515,7 +567,7 @@ save_plot_all_formats <- function(plot_object,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   ggplot2::ggsave(
     filename = tiff_file,
     plot = plot_object,
@@ -526,13 +578,13 @@ save_plot_all_formats <- function(plot_object,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   pdf_device <- if (capabilities("cairo")) {
     grDevices::cairo_pdf
   } else {
     grDevices::pdf
   }
-  
+
   ggplot2::ggsave(
     filename = pdf_file,
     plot = plot_object,
@@ -542,7 +594,7 @@ save_plot_all_formats <- function(plot_object,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -559,9 +611,9 @@ find_first_existing <- function(candidates,
       !is.na(candidates) & nzchar(candidates)
     ]
   )
-  
+
   existing <- candidates[file.exists(candidates)]
-  
+
   if (length(existing) == 0L) {
     stop(
       label,
@@ -569,7 +621,7 @@ find_first_existing <- function(candidates,
       paste(candidates, collapse = "\n")
     )
   }
-  
+
   normalizePath(
     existing[1],
     winslash = "/",
@@ -580,7 +632,7 @@ find_first_existing <- function(candidates,
 make_group_factor <- function(x) {
   raw <- as.character(x)
   raw_lower <- tolower(trimws(raw))
-  
+
   if (all(raw %in% c("1", "2"))) {
     return(
       factor(
@@ -590,7 +642,7 @@ make_group_factor <- function(x) {
       )
     )
   }
-  
+
   known_labels <- c(
     "normal",
     "tumor",
@@ -599,14 +651,14 @@ make_group_factor <- function(x) {
     "cancer",
     "margin"
   )
-  
+
   if (all(raw_lower %in% known_labels)) {
     mapped <- ifelse(
       raw_lower %in% c("tumor", "lscc", "cancer"),
       "Tumor",
       "Normal"
     )
-    
+
     return(
       factor(
         mapped,
@@ -614,16 +666,16 @@ make_group_factor <- function(x) {
       )
     )
   }
-  
+
   observed_values <- sort(unique(raw))
-  
+
   if (length(observed_values) != 2L) {
     stop(
       "The bulk group column must have exactly two classes. Found: ",
       paste(observed_values, collapse = ", ")
     )
   }
-  
+
   factor(
     ifelse(raw == observed_values[1], "Normal", "Tumor"),
     levels = c("Normal", "Tumor")
@@ -639,30 +691,30 @@ read_discovery_cpm <- function(path) {
     check.names = FALSE,
     stringsAsFactors = FALSE
   )
-  
+
   required_columns <- c("Sample", "group")
-  
+
   missing_columns <- setdiff(
     required_columns,
     colnames(data)
   )
-  
+
   if (length(missing_columns) > 0L) {
     stop(
       "Discovery CPM input is missing required column(s): ",
       paste(missing_columns, collapse = ", ")
     )
   }
-  
+
   data$Sample <- trimws(as.character(data$Sample))
   data$Group <- make_group_factor(data$group)
-  
+
   if ("batch" %in% colnames(data)) {
     data$Batch <- as.character(data$batch)
   } else {
     data$Batch <- "1"
   }
-  
+
   metadata_columns <- c(
     "Sample",
     "group",
@@ -670,16 +722,16 @@ read_discovery_cpm <- function(path) {
     "Group",
     "Batch"
   )
-  
+
   gene_columns <- setdiff(
     colnames(data),
     metadata_columns
   )
-  
+
   if (length(gene_columns) < 100L) {
     stop("Discovery CPM input has too few gene columns.")
   }
-  
+
   expression_samples_by_genes <- as.data.frame(
     lapply(
       data[, gene_columns, drop = FALSE],
@@ -689,37 +741,37 @@ read_discovery_cpm <- function(path) {
     ),
     check.names = FALSE
   )
-  
+
   colnames(expression_samples_by_genes) <- toupper(
     colnames(expression_samples_by_genes)
   )
-  
+
   expression_samples_by_genes <- expression_samples_by_genes[
     ,
     !duplicated(colnames(expression_samples_by_genes)),
     drop = FALSE
   ]
-  
+
   expression_matrix <- as.matrix(expression_samples_by_genes)
   storage.mode(expression_matrix) <- "numeric"
   expression_matrix[!is.finite(expression_matrix)] <- 0
-  
+
   if (any(expression_matrix < 0, na.rm = TRUE)) {
     stop(
       "Discovery CPM matrix contains negative values; expected non-negative CPM."
     )
   }
-  
+
   expression_gene_by_sample <- t(
     log2(expression_matrix + 1)
   )
-  
+
   rownames(expression_gene_by_sample) <- colnames(
     expression_samples_by_genes
   )
-  
+
   colnames(expression_gene_by_sample) <- data$Sample
-  
+
   list(
     metadata = data.frame(
       Sample = data$Sample,
@@ -756,21 +808,21 @@ get_hallmark_gene_sets <- function() {
       )
     }
   )
-  
+
   required_columns <- c("gs_name", "gene_symbol")
-  
+
   missing_columns <- setdiff(
     required_columns,
     colnames(hallmark_table)
   )
-  
+
   if (length(missing_columns) > 0L) {
     stop(
       "msigdbr Hallmark table is missing: ",
       paste(missing_columns, collapse = ", ")
     )
   }
-  
+
   hallmark_table <- hallmark_table %>%
     dplyr::transmute(
       Pathway = as.character(gs_name),
@@ -781,14 +833,14 @@ get_hallmark_gene_sets <- function() {
       nzchar(Gene)
     ) %>%
     dplyr::distinct()
-  
+
   pathways <- split(
     hallmark_table$Gene,
     hallmark_table$Pathway
   )
-  
+
   pathways <- lapply(pathways, unique)
-  
+
   list(
     pathways = pathways,
     table = hallmark_table
@@ -811,9 +863,9 @@ write_gmt <- function(gene_sets,
     },
     character(1)
   )
-  
+
   writeLines(gmt_lines, file_path)
-  
+
   invisible(file_path)
 }
 
@@ -828,7 +880,7 @@ run_fgsea_safe <- function(pathways,
       "The GSEA ranked statistic must be a named atomic numeric vector."
     )
   }
-  
+
   output <- tryCatch(
     fgsea::fgseaMultilevel(
       pathways = pathways,
@@ -838,7 +890,11 @@ run_fgsea_safe <- function(pathways,
       eps = 0
     ),
     error = function(multilevel_error) {
-      
+      message(
+        "fgseaMultilevel failed; trying fgseaSimple. Reason: ",
+        multilevel_error$message
+      )
+
       tryCatch(
         fgsea::fgseaSimple(
           pathways = pathways,
@@ -859,7 +915,7 @@ run_fgsea_safe <- function(pathways,
       )
     }
   )
-  
+
   as.data.frame(output)
 }
 
@@ -867,17 +923,17 @@ format_fdr <- function(x) {
   if (!is.finite(x)) {
     return("FDR = NA")
   }
-  
+
   if (x < 0.001) {
     return("FDR < 0.001")
   }
-  
+
   paste0("FDR = ", sprintf("%.3f", x))
 }
 
 pretty_hallmark_name <- function(x) {
   x <- as.character(x)
-  
+
   labels <- c(
     "HALLMARK_E2F_TARGETS" = "E2F Targets",
     "HALLMARK_G2M_CHECKPOINT" = "G2/M Checkpoint",
@@ -889,17 +945,17 @@ pretty_hallmark_name <- function(x) {
     "HALLMARK_TNFA_SIGNALING_VIA_NFKB" = "TNFα Signaling via NF-κB",
     "HALLMARK_KRAS_SIGNALING_UP" = "KRAS Signaling Up"
   )
-  
+
   output <- unname(labels[x])
   missing <- is.na(output)
-  
+
   if (any(missing)) {
     fallback <- x[missing]
     fallback <- gsub("^HALLMARK_", "", fallback)
     fallback <- gsub("_", " ", fallback)
     output[missing] <- tools::toTitleCase(tolower(fallback))
   }
-  
+
   output
 }
 
@@ -919,11 +975,11 @@ wrap_hallmark_name <- function(x,
 
 make_fgsea_csv_safe <- function(data) {
   data <- as.data.frame(data)
-  
+
   if (!("leadingEdge" %in% colnames(data))) {
     return(data)
   }
-  
+
   data$leadingEdge_collapsed <- vapply(
     data$leadingEdge,
     function(genes) {
@@ -931,9 +987,9 @@ make_fgsea_csv_safe <- function(data) {
     },
     character(1)
   )
-  
+
   data$leadingEdge <- NULL
-  
+
   data
 }
 
@@ -943,18 +999,18 @@ make_leading_edge_table <- function(gsea_results) {
       "The GSEA result table does not contain the leadingEdge column."
     )
   }
-  
+
   output_rows <- lapply(
     seq_len(nrow(gsea_results)),
     function(index) {
       genes <- as.character(
         gsea_results$leadingEdge[[index]]
       )
-      
+
       if (length(genes) == 0L) {
         return(NULL)
       }
-      
+
       data.frame(
         pathway = rep(
           as.character(gsea_results$pathway[index]),
@@ -977,7 +1033,7 @@ make_leading_edge_table <- function(gsea_results) {
       )
     }
   )
-  
+
   dplyr::bind_rows(output_rows)
 }
 
@@ -1006,53 +1062,55 @@ make_ranked_limma_stats <- function(association_table,
       dplyr::desc(Statistic),
       Gene
     )
-  
+
   if (nrow(ranked_table) < 1000L) {
     stop(
       "Too few genes remain after removing MYBL2 and duplicated gene symbols."
     )
   }
-  
+
   statistic_values <- as.numeric(ranked_table$Statistic)
   gene_names <- as.character(ranked_table$Gene)
-  
+
+  # Handle only exact ties. The offsets are extremely small and are used solely
+  # to create deterministic order for fgsea; they do not alter non-tied ranks.
   run_lengths <- rle(statistic_values)$lengths
   run_start <- 1L
-  
+
   for (run_length in run_lengths) {
     if (run_length > 1L) {
       positions <- seq.int(
         from = run_start,
         length.out = run_length
       )
-      
+
       offsets <- seq(
         from = run_length,
         to = 1L,
         by = -1L
       ) * epsilon
-      
+
       statistic_values[positions] <- (
         statistic_values[positions] + offsets
       )
     }
-    
+
     run_start <- run_start + run_length
   }
-  
+
   final_order <- order(
     -statistic_values,
     gene_names,
     method = "radix"
   )
-  
+
   ranked_stats <- as.numeric(
     statistic_values[final_order]
   )
-  
+
   names(ranked_stats) <- gene_names[final_order]
   storage.mode(ranked_stats) <- "double"
-  
+
   if (!is.atomic(ranked_stats) ||
       is.list(ranked_stats) ||
       !is.numeric(ranked_stats) ||
@@ -1061,18 +1119,19 @@ make_ranked_limma_stats <- function(association_table,
       "The final GSEA ranking could not be constructed as an atomic numeric vector."
     )
   }
-  
+
   ranked_stats
 }
 
-# STEP 06: Define plotting functions.
-make_gsea_overview_plot <- function(gsea_results) {
+# Step 5: figure helpers
+
+make_gsea_summary_plot <- function(gsea_results) {
   usable_results <- gsea_results %>%
     dplyr::filter(
       is.finite(NES),
       is.finite(padj)
     )
-  
+
   selected <- usable_results %>%
     dplyr::filter(padj < FDR_CUTOFF) %>%
     dplyr::mutate(
@@ -1092,7 +1151,7 @@ make_gsea_overview_plot <- function(gsea_results) {
       n = TOP_PATHWAYS_PER_DIRECTION
     ) %>%
     dplyr::ungroup()
-  
+
   if (nrow(selected) == 0L) {
     selected <- usable_results %>%
       dplyr::arrange(
@@ -1110,7 +1169,7 @@ make_gsea_overview_plot <- function(gsea_results) {
         )
       )
   }
-  
+
   selected <- selected %>%
     dplyr::mutate(
       Direction_short = factor(
@@ -1121,12 +1180,12 @@ make_gsea_overview_plot <- function(gsea_results) {
       neglog10FDR = -log10(pmax(padj, 1e-300))
     ) %>%
     dplyr::arrange(NES)
-  
+
   selected$Label <- factor(
     selected$Label,
     levels = selected$Label
   )
-  
+
   ggplot2::ggplot(
     selected,
     ggplot2::aes(
@@ -1191,20 +1250,20 @@ make_focus_enrichment_plots <- function(pathways,
   focus_existing <- FOCUS_HALLMARK_PATHWAYS[
     FOCUS_HALLMARK_PATHWAYS %in% names(pathways)
   ]
-  
+
   if (length(focus_existing) != length(FOCUS_HALLMARK_PATHWAYS)) {
     missing_focus <- setdiff(
       FOCUS_HALLMARK_PATHWAYS,
       focus_existing
     )
-    
+
     stop(
-      "The following requested Hallmark pathways were unavailable after ",
+      "The following selected Hallmark pathways were unavailable after ",
       "gene-overlap filtering: ",
       paste(missing_focus, collapse = ", ")
     )
   }
-  
+
   plots <- lapply(
     focus_existing,
     function(pathway_name) {
@@ -1213,16 +1272,16 @@ make_focus_enrichment_plots <- function(pathways,
         ,
         drop = FALSE
       ]
-      
+
       current_color <- unname(CURVE_PATHWAY_COLORS[[pathway_name]])
       if (is.null(current_color) || is.na(current_color)) {
         current_color <- "#1F5AA6"
       }
-      
+
       if (nrow(current_result) != 1L) {
         stop("No unique GSEA result was available for ", pathway_name, ".")
       }
-      
+
       make_custom_enrichment_plot(
         pathway_genes = pathways[[pathway_name]],
         ranked_stats = ranked_stats,
@@ -1232,9 +1291,9 @@ make_focus_enrichment_plots <- function(pathways,
       )
     }
   )
-  
+
   names(plots) <- focus_existing
-  
+
   plots <- Map(
     function(plot_object, panel_tag) {
       plot_object + ggplot2::labs(tag = panel_tag)
@@ -1242,7 +1301,7 @@ make_focus_enrichment_plots <- function(pathways,
     plots,
     letters[seq_along(plots)]
   )
-  
+
   list(
     plots = plots,
     data = gsea_results %>%
@@ -1255,49 +1314,84 @@ make_focus_enrichment_plots <- function(pathways,
   )
 }
 
-# STEP 07: Run analysis.
+# Step 6: main analysis
+
 run_mybl2_limma_batch_adjusted_gsea <- function() {
+  writeLines(character(0), RUN_LOG)
+
+  status <- list(
+    completed = FALSE,
+    stage = "started",
+    error = NA_character_
+  )
+
+  write_status <- function() {
+    writeLines(
+      c(
+        "MYBL2-continuous Hallmark GSEA status — limma batch-adjusted version",
+        paste0("Completed: ", status$completed),
+        paste0("Final stage: ", status$stage),
+        paste0(
+          "Error: ",
+          ifelse(is.na(status$error), "none", status$error)
+        ),
+        paste0("Output directory: ", OUTPUT_DIR)
+      ),
+      STATUS_TXT
+    )
+
+    writeLines(
+      capture.output(sessionInfo()),
+      SESSION_TXT
+    )
+  }
+
   tryCatch(
     {
-      
+      status$stage <- "locating_input"
+      log_message("STAGE: locating pooled discovery CPM input")
+
       discovery_cpm_file <- find_first_existing(
         DEVELOPMENT_CPM_CANDIDATES,
         "Discovery bulk CPM matrix"
       )
-      
+
+      status$stage <- "reading_tumor_expression"
+      log_message("STAGE: reading pooled discovery cohort and retaining tumors")
+
       input <- read_discovery_cpm(
         discovery_cpm_file
       )
-      
+
       if (!(TARGET_GENE %in% rownames(input$expression))) {
         stop(
           "MYBL2 is absent from the discovery expression matrix."
         )
       }
-      
+
       tumor_metadata <- input$metadata %>%
         dplyr::filter(Group == "Tumor") %>%
         dplyr::arrange(Sample)
-      
+
       if (nrow(tumor_metadata) < 20L) {
         stop(
           "Fewer than 20 tumor samples are available for MYBL2-continuous GSEA."
         )
       }
-      
+
       tumor_expression <- input$expression[
         ,
         tumor_metadata$Sample,
         drop = FALSE
       ]
-      
+
       tumor_metadata$MYBL2_expression <- as.numeric(
         tumor_expression[
           TARGET_GENE,
           tumor_metadata$Sample
         ]
       )
-      
+
       if (
         sum(is.finite(tumor_metadata$MYBL2_expression)) < 20L ||
         stats::sd(
@@ -1309,45 +1403,65 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           "MYBL2 expression has insufficient finite variation among tumor samples."
         )
       }
-      
+
       tumor_metadata$MYBL2_z <- as.numeric(
         scale(tumor_metadata$MYBL2_expression)
       )
-      
+
       tumor_metadata$Batch <- factor(
         as.character(tumor_metadata$Batch)
       )
-      
+
+      if (nlevels(tumor_metadata$Batch) < 2L) {
+        log_message(
+          "NOTICE: only one batch is available; the model will include MYBL2 only."
+        )
+      } else {
+        log_message(
+          "Batch-adjusted model enabled with ",
+          nlevels(tumor_metadata$Batch),
+          " batch levels."
+        )
+      }
+
       write.csv(
         tumor_metadata,
         TUMOR_SAMPLE_METADATA_CSV,
         row.names = FALSE
       )
-      
+
+      status$stage <- "filtering_zero_variance_genes"
+      log_message("STAGE: removing zero-variance genes before limma")
+
       gene_variances <- apply(
         tumor_expression,
         1,
         stats::var,
         na.rm = TRUE
       )
-      
+
       keep_variable_genes <- (
         is.finite(gene_variances) &
-          gene_variances > 0
+        gene_variances > 0
       )
-      
+
       if (sum(keep_variable_genes) < 1000L) {
         stop(
           "Too few variable genes remain after zero-variance filtering."
         )
       }
-      
+
       tumor_expression <- tumor_expression[
         keep_variable_genes,
         ,
         drop = FALSE
       ]
-      
+
+      status$stage <- "limma_continuous_association"
+      log_message(
+        "STAGE: limma model of continuous MYBL2 expression adjusted for batch"
+      )
+
       if (nlevels(tumor_metadata$Batch) >= 2L) {
         design <- stats::model.matrix(
           ~ MYBL2_z + Batch,
@@ -1361,30 +1475,30 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
         )
         batch_adjustment_used <- FALSE
       }
-      
+
       if (!("MYBL2_z" %in% colnames(design))) {
         stop(
           "The MYBL2 continuous coefficient was not found in the limma design."
         )
       }
-      
+
       if (qr(design)$rank < ncol(design)) {
         stop(
           "The limma design matrix is rank deficient. MYBL2 and batch may be ",
           "perfectly confounded; batch-adjusted analysis cannot be estimated."
         )
       }
-      
+
       fit <- limma::lmFit(
         tumor_expression,
         design
       )
-      
+
       fit <- limma::eBayes(
         fit,
         trend = TRUE
       )
-      
+
       association_table <- limma::topTable(
         fit,
         coef = "MYBL2_z",
@@ -1392,9 +1506,9 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
         adjust.method = "BH",
         sort.by = "t"
       )
-      
+
       association_table$Gene <- rownames(association_table)
-      
+
       association_table <- association_table %>%
         dplyr::transmute(
           Gene = as.character(Gene),
@@ -1409,33 +1523,36 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           P.Value,
           Gene
         )
-      
+
       if (nrow(association_table) < 1000L) {
         stop(
           "Too few genes were retained by limma for GSEA."
         )
       }
-      
+
       write.csv(
         association_table,
         MYBL2_ASSOCIATION_CSV,
         row.names = FALSE
       )
-      
+
       ranked_stats <- make_ranked_limma_stats(
         association_table = association_table,
         target_gene = TARGET_GENE,
         epsilon = 1e-10
       )
-      
+
       if (length(ranked_stats) < 1000L) {
         stop(
           "Too few genes remain in the MYBL2-associated ranked list for GSEA."
         )
       }
-      
+
+      status$stage <- "retrieving_hallmark_gene_sets"
+      log_message("STAGE: retrieving MSigDB Hallmark gene sets")
+
       hallmark <- get_hallmark_gene_sets()
-      
+
       hallmark_pathways <- lapply(
         hallmark$pathways,
         function(genes) {
@@ -1445,7 +1562,7 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           )
         }
       )
-      
+
       hallmark_pathways <- hallmark_pathways[
         vapply(
           hallmark_pathways,
@@ -1453,13 +1570,13 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           integer(1)
         ) >= MIN_GENE_SET_SIZE
       ]
-      
+
       if (length(hallmark_pathways) < 10L) {
         stop(
           "Too few Hallmark pathways overlap the MYBL2-ranked gene list."
         )
       }
-      
+
       hallmark_table_used <- hallmark$table %>%
         dplyr::filter(
           Pathway %in% names(hallmark_pathways),
@@ -1469,27 +1586,30 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           Pathway,
           Gene
         )
-      
+
       write.csv(
         hallmark_table_used,
         HALLMARK_GENESET_CSV,
         row.names = FALSE
       )
-      
+
       write_gmt(
         hallmark_pathways,
         HALLMARK_GMT
       )
-      
+
+      status$stage <- "running_preranked_gsea"
+      log_message("STAGE: pre-ranked Hallmark GSEA")
+
       gsea_results <- run_fgsea_safe(
         pathways = hallmark_pathways,
         stats_vector = ranked_stats
       )
-      
+
       if (nrow(gsea_results) == 0L) {
         stop("Hallmark GSEA returned no results.")
       }
-      
+
       gsea_results <- gsea_results %>%
         dplyr::mutate(
           leadingEdge_collapsed = vapply(
@@ -1509,7 +1629,7 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           padj,
           dplyr::desc(abs(NES))
         )
-      
+
       gsea_results_export <- make_fgsea_csv_safe(
         gsea_results
       ) %>%
@@ -1523,33 +1643,36 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           Direction,
           leadingEdge_collapsed
         )
-      
+
       write.csv(
         gsea_results_export,
         GSEA_RESULTS_CSV,
         row.names = FALSE
       )
-      
+
       leading_edge_table <- make_leading_edge_table(
         gsea_results
       )
-      
+
       write.csv(
         leading_edge_table,
         GSEA_LEADING_EDGE_CSV,
         row.names = FALSE
       )
-      
-      gsea_overview_plot <- make_gsea_overview_plot(
+
+      status$stage <- "creating_figures"
+      log_message("STAGE: creating Hallmark GSEA manuscript figures")
+
+      summary_plot <- make_gsea_summary_plot(
         gsea_results
       )
-      
+
       focus <- make_focus_enrichment_plots(
         pathways = hallmark_pathways,
         ranked_stats = ranked_stats,
         gsea_results = gsea_results
       )
-      
+
       focus_export <- make_fgsea_csv_safe(
         focus$data
       ) %>%
@@ -1563,41 +1686,68 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
           Direction,
           leadingEdge_collapsed
         )
-      
+
       write.csv(
         focus_export,
         FOCUS_PATHWAYS_CSV,
         row.names = FALSE
       )
-      
+
       if (length(focus$plots) != 4L) {
         stop(
           "Exactly four focus pathways are required to create the 2 x 2 curve figure."
         )
       }
-      
+
       curve_plot <- (
         focus$plots[[1]] |
-          focus$plots[[2]]
+        focus$plots[[2]]
       ) / (
         focus$plots[[3]] |
-          focus$plots[[4]]
+        focus$plots[[4]]
       )
-      
+
       save_plot_all_formats(
-        gsea_overview_plot,
-        GSEA_FIGURE_STEM,
-        width = GSEA_FIGURE_W,
-        height = GSEA_FIGURE_H
+        summary_plot,
+        SUMMARY_FIGURE_STEM,
+        width = SUMMARY_FIGURE_W,
+        height = SUMMARY_FIGURE_H
       )
-      
+
       save_plot_all_formats(
         curve_plot,
         CURVE_FIGURE_STEM,
         width = CURVE_FIGURE_W,
         height = CURVE_FIGURE_H
       )
-      
+
+      status$stage <- "writing_reproducibility_outputs"
+      log_message("STAGE: writing summary, provenance, and RDS outputs")
+
+      writeLines(
+        c(
+          "Input provenance",
+          paste0("Discovery CPM matrix: ", input$source),
+          paste0("Output directory: ", OUTPUT_DIR),
+          "Analysis samples: tumor samples from pooled GSE127165 + GSE142083 only.",
+          "Expression scale: log2(TMM-CPM + 1).",
+          paste0(
+            "Batch adjustment used: ",
+            ifelse(batch_adjustment_used, "yes", "no; only one batch level")
+          ),
+          "Model: limma continuous MYBL2 z-score association plus batch covariates when available.",
+          "Ranking statistic: moderated limma t-statistic for MYBL2_z.",
+          "MYBL2 itself was removed from the ranked list before GSEA.",
+          "Genes with zero variance across tumors were removed before limma fitting.",
+          "Exact ties in the limma t-statistic were given deterministic negligible offsets only for fgsea ranking.",
+          "Pathways: MSigDB Hallmark gene sets retrieved using msigdbr.",
+          "GSEA: fgsea pre-ranked analysis.",
+          "All fgsea list columns were converted to semicolon-separated strings before CSV export.",
+          "Figures report the original fgsea NES and FDR values and preserve ranked-gene names during rendering."
+        ),
+        PROVENANCE_TXT
+      )
+
       saveRDS(
         list(
           input_source = input$source,
@@ -1613,12 +1763,103 @@ run_mybl2_limma_batch_adjusted_gsea <- function() {
         ),
         RESULT_RDS
       )
+
+      significant_pathway_count <- sum(
+        is.finite(gsea_results$padj) &
+        gsea_results$padj < FDR_CUTOFF
+      )
+
+      writeLines(
+        c(
+          "MYBL2-continuous Hallmark GSEA completed successfully.",
+          "",
+          "Analysis population:",
+          paste0(
+            "  ",
+            nrow(tumor_metadata),
+            " tumor samples from pooled GSE127165 + GSE142083."
+          ),
+          "",
+          "Continuous association model:",
+          paste0(
+            "  Gene expression ~ standardized MYBL2 expression",
+            ifelse(
+              batch_adjustment_used,
+              " + batch.",
+              "."
+            )
+          ),
+          "  Ranking statistic: moderated limma t-statistic.",
+          "  MYBL2 was removed from the ranked gene list before GSEA.",
+          "",
+          "GSEA:",
+          "  Database: MSigDB Hallmark gene sets.",
+          paste0(
+            "  Significant pathways at BH-FDR < ",
+            FDR_CUTOFF,
+            ": ",
+            significant_pathway_count,
+            "."
+          ),
+          "",
+          "Figures:",
+          paste0(
+            "  ",
+            file.path(
+              OUTPUT_DIR,
+              SUMMARY_FIGURE_STEM
+            ),
+            ".png/.tiff/.pdf"
+          ),
+          paste0(
+            "  ",
+            file.path(
+              OUTPUT_DIR,
+              CURVE_FIGURE_STEM
+            ),
+            ".png/.tiff/.pdf"
+          )
+        ),
+        SUMMARY_TXT
+      )
+
+      status$completed <- TRUE
+      status$stage <- "finished"
+      write_status()
+
+      cat(
+        "\n============================================================\n",
+        "MYBL2-CONTINUOUS LIMMA BATCH-ADJUSTED HALLMARK GSEA FINISHED\n",
+        "============================================================\n",
+        "All outputs were saved in:\n",
+        OUTPUT_DIR,
+        "\n============================================================\n",
+        sep = ""
+      )
     },
     error = function(error_object) {
+      status$error <- conditionMessage(error_object)
+      status$stage <- "failed"
+
+      write_status()
+
+      writeLines(
+        c(
+          "MYBL2-continuous limma batch-adjusted Hallmark GSEA failed.",
+          "",
+          conditionMessage(error_object)
+        ),
+        file.path(
+          OUTPUT_DIR,
+          "MYBL2_limma_batch_adjusted_GSEA_error.txt"
+        )
+      )
+
       stop(error_object)
     }
   )
 }
 
-# STEP 08: Execute.
+# Step 7: execute
+
 run_mybl2_limma_batch_adjusted_gsea()
