@@ -222,21 +222,6 @@ The following measures were implemented to support computational reproducibility
 - Sensitivity analyses write their results to separate output directories.
 - Sensitivity analyses do not overwrite the primary analysis results.
 
-## Data Availability
-
-The scripts require the following input files and objects:
-
-- Gene-expression matrices
-- Phenotype tables
-- Cell-annotation files
-- Gene-order file
-- Saved intermediate RDS objects
-- Dataset-specific metadata files
-
-The required file locations are described in the path section of each script.
-
-Raw and processed patient-level data are not distributed with this repository.
-
 ## Public Datasets
 
 Public datasets used in the workflow are available through the following accession identifiers:
