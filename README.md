@@ -2,17 +2,6 @@
 
 This repository contains the **R code** used for the reproducible analysis of **MYBL2 in lung squamous cell carcinoma (LSCC)**.
 
-The workflow integrates:
-
-- Single-cell RNA sequencing
-- Bulk transcriptomic analysis
-- Machine-learning analysis
-- Immune-microenvironment profiling
-- Functional-programme analysis
-- Cell–cell communication analysis
-- Trajectory inference
-- Sensitivity and benchmark analyses
-
 ## Main Analysis Workflow
 
 Run the primary analyses in the following order.
