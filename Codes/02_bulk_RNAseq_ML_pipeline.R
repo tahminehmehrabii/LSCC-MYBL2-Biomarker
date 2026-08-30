@@ -1,28 +1,33 @@
-# STEP 01: Setup packages, paths, and helper functions.
+# LSCC bulk RNA-seq and machine-learning pipeline
+# WGCNA requires the Bioconductor package `impute`.
 
-if (!exists("project_path")) {
-  project_path <- getwd()
-}
+# Step 01: setup, packages, paths, and global helpers
 
-setwd(project_path)
-invisible(gc())
+rm(list = ls())
+gc()
+
 set.seed(123)
 options(stringsAsFactors = FALSE)
 options(scipen = 100)
 options(timeout = 3600)
 
-data_path <- file.path("Data", "Bulk")
-results_path <- file.path("Results", "ML")
+# Input and output paths
+project_path <- "E:/LSCC/Bulk_RNASeq_ML_Results"
+results_path <- "E:/LSCC/Results_LSCC/ML"
 manuscript_figures_path <- results_path
 FIGURE_DIR <- results_path
 
-scrna_figdir <- file.path("Results", "scRNAseq", "figures")
-
-dir.create(data_path, recursive = TRUE, showWarnings = FALSE)
 dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
-dir.create(scrna_figdir, recursive = TRUE, showWarnings = FALSE)
+
+# Precomputed single-cell output folder.
+# This script does NOT run single-cell analysis.
+scrna_figdir <- "E:/LSCC/ScRNAseq_Results/GSE206332/Results/figures"
 
 TARGET_GENE <- "MYBL2"
+
+# Figure settings
+
+# Fonts and export quality
 
 if (.Platform$OS.type == "windows") {
   try(
@@ -37,14 +42,21 @@ FONT_FAMILY <- "Arial"
 FIG_DPI <- 600
 FIG_BACKGROUND <- "white"
 
+# Standard manuscript figure dimensions (inches)
+
 FIG_SINGLE_W <- 3.50
 FIG_SINGLE_H <- 4.20
 
 FIG_DOUBLE_W <- 7.20
 FIG_DOUBLE_H <- 5.40
 
+# Final combined Figure 2
+
 FIGURE2_COMBINED_W <- 14.00
+# Reduced height to avoid an overly elongated final Figure 2.
 FIGURE2_COMBINED_H <- 6.40
+
+# Typography (pt)
 
 BASE_TEXT_PT <- 9.5
 
@@ -57,6 +69,8 @@ LEGEND_TITLE_PT <- 9
 PLOT_TITLE_PT <- 10
 PANEL_TAG_PT <- 14
 
+# Shared panel geometry: applies to every ggplot, base-R plot, pheatmap panel,
+# and raster-combined multi-panel figure in this full pipeline.
 PANEL_TAG_POSITION <- c(0.015, 0.985)
 PANEL_TAG_RASTER_SIZE <- 135
 PANEL_TAG_RASTER_OFFSET_X <- 80
@@ -71,18 +85,25 @@ BASE_AXIS_CEX <- 0.90
 BASE_AXIS_TITLE_CEX <- 1.00
 BASE_ANNOTATION_CEX <- 0.82
 
+# Line widths
+
 PANEL_BORDER_LWD <- 0.45
 AXIS_LWD <- 0.40
 GEOM_LWD <- 0.55
 GRID_LWD <- 0.30
+
+# Heatmap typography
+# Increased for clearer Group/Regulation annotation legends in Figure 2B.
 
 HEATMAP_FONT_PT <- 10
 HEATMAP_ROW_FONT_PT <- 8
 HEATMAP_COL_FONT_PT <- 8
 HEATMAP_LEGEND_FONT_PT <- 10
 
-COL_NORMAL <- "#7470B2"
-COL_TUMOR <- "#D81B60"
+# Repeated semantic colours: lavender-purple and fuchsia-magenta
+
+COL_NORMAL <- "#7470B2"  # lavender-purple
+COL_TUMOR <- "#D81B60"  # fuchsia-magenta
 
 COL_MYBL2_LOW <- COL_NORMAL
 COL_MYBL2_HIGH <- COL_TUMOR
@@ -91,9 +112,13 @@ COL_UP <- COL_TUMOR
 COL_DOWN <- COL_NORMAL
 COL_NS <- "#B8B8B8"
 
+# Fixed green-blue palette for future CellChat figures
+
 CELLCHAT_PALETTE <- grDevices::colorRampPalette(
   c("#E8F6F4", "#B8E1DA", "#73C6BE", "#2D9D8C", "#006E63")
 )(100)
+
+# Standard plot margins
 
 MANUSCRIPT_MARGIN <- ggplot2::margin(
   t = 5.5,
@@ -103,9 +128,11 @@ MANUSCRIPT_MARGIN <- ggplot2::margin(
   unit = "pt"
 )
 
+# Shared plotting theme
+
 theme_manuscript <- function(show_grid = FALSE,
                              legend_position = "right") {
-  
+
   ggplot2::theme_bw(
     base_size = BASE_TEXT_PT,
     base_family = FONT_FAMILY
@@ -115,7 +142,7 @@ theme_manuscript <- function(show_grid = FALSE,
         family = FONT_FAMILY,
         color = "black"
       ),
-      
+
       plot.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -125,7 +152,7 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.title.position = "panel",
-      
+
       plot.tag = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -135,7 +162,7 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.tag.position = PANEL_TAG_POSITION,
-      
+
       axis.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -156,7 +183,7 @@ theme_manuscript <- function(show_grid = FALSE,
         linewidth = AXIS_LWD
       ),
       axis.ticks.length = grid::unit(TICK_LENGTH_PT, "pt"),
-      
+
       legend.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -177,7 +204,7 @@ theme_manuscript <- function(show_grid = FALSE,
         fill = FIG_BACKGROUND,
         color = NA
       ),
-      
+
       panel.background = ggplot2::element_rect(
         fill = FIG_BACKGROUND,
         color = NA
@@ -200,7 +227,7 @@ theme_manuscript <- function(show_grid = FALSE,
         ggplot2::element_blank()
       },
       panel.grid.minor = ggplot2::element_blank(),
-      
+
       strip.background = ggplot2::element_rect(
         fill = "grey95",
         color = "black",
@@ -212,24 +239,26 @@ theme_manuscript <- function(show_grid = FALSE,
         size = AXIS_TEXT_PT,
         color = "black"
       ),
-      
+
       panel.spacing = grid::unit(PANEL_SPACING_PT, "pt"),
       plot.margin = MANUSCRIPT_MARGIN
     )
 }
+
+# Figure export functions
 
 save_plot_all_formats <- function(plot_obj,
                                   filename_stem,
                                   dir_path,
                                   width = FIG_DOUBLE_W,
                                   height = FIG_DOUBLE_H) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   ggplot2::ggsave(
     filename = png_file,
     plot = plot_obj,
@@ -239,7 +268,7 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   ggplot2::ggsave(
     filename = tiff_file,
     plot = plot_obj,
@@ -250,13 +279,13 @@ save_plot_all_formats <- function(plot_obj,
     compression = "lzw",
     limitsize = FALSE
   )
-  
+
   pdf_device <- if (capabilities("cairo")) {
     grDevices::cairo_pdf
   } else {
     grDevices::pdf
   }
-  
+
   ggplot2::ggsave(
     filename = pdf_file,
     plot = plot_obj,
@@ -266,7 +295,7 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -278,15 +307,15 @@ save_plot_all_formats <- function(plot_obj,
 
 set_grob_font_family <- function(grob_object,
                                  font_family = FONT_FAMILY) {
-  
+
   if (is.null(grob_object)) {
     return(grob_object)
   }
-  
+
   if (!is.null(grob_object$gp)) {
     grob_object$gp$fontfamily <- font_family
   }
-  
+
   if (!is.null(grob_object$children)) {
     for (i in seq_along(grob_object$children)) {
       grob_object$children[[i]] <- set_grob_font_family(
@@ -295,7 +324,7 @@ set_grob_font_family <- function(grob_object,
       )
     }
   }
-  
+
   if (!is.null(grob_object$grobs)) {
     for (i in seq_along(grob_object$grobs)) {
       grob_object$grobs[[i]] <- set_grob_font_family(
@@ -304,7 +333,7 @@ set_grob_font_family <- function(grob_object,
       )
     }
   }
-  
+
   grob_object
 }
 
@@ -313,15 +342,15 @@ save_grob_all_formats <- function(grob_obj,
                                   dir_path,
                                   width = FIG_DOUBLE_W,
                                   height = FIG_DOUBLE_H) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   grob_obj <- set_grob_font_family(grob_obj, FONT_FAMILY)
-  
+
   draw_grob <- function() {
     grid::grid.newpage()
     grid::grid.rect(
@@ -332,7 +361,7 @@ save_grob_all_formats <- function(grob_obj,
     )
     grid::grid.draw(grob_obj)
   }
-  
+
   grDevices::png(
     filename = png_file,
     width = width,
@@ -343,7 +372,7 @@ save_grob_all_formats <- function(grob_obj,
   )
   draw_grob()
   grDevices::dev.off()
-  
+
   grDevices::tiff(
     filename = tiff_file,
     width = width,
@@ -355,7 +384,7 @@ save_grob_all_formats <- function(grob_obj,
   )
   draw_grob()
   grDevices::dev.off()
-  
+
   if (capabilities("cairo")) {
     grDevices::cairo_pdf(
       filename = pdf_file,
@@ -371,10 +400,10 @@ save_grob_all_formats <- function(grob_obj,
       family = FONT_FAMILY
     )
   }
-  
+
   draw_grob()
   grDevices::dev.off()
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -384,6 +413,7 @@ save_grob_all_formats <- function(grob_obj,
   )
 }
 
+# Required R packages (these packages must already be installed).
 suppressPackageStartupMessages({
   library(data.table)
   library(edgeR)
@@ -410,8 +440,13 @@ suppressPackageStartupMessages({
   library(GSVA)
 })
 
+# Optional package used only for the GBM classifier.
+# This is not an installation command. When gbm is unavailable, the pipeline
+# automatically continues with RF and SVM only.
 HAS_GBM <- requireNamespace("gbm", quietly = TRUE)
 
+# Each analysis step returns the same ML folder so every CSV, TXT, RDS and
+# Figures generated by this script are saved in `results_path`.
 make_stage_dir <- function(step_number, step_name) {
   dir.create(results_path, recursive = TRUE, showWarnings = FALSE)
   results_path
@@ -431,16 +466,18 @@ save_fig <- function(plot_obj, filename, dir_path, width = 8, height = 6, dpi = 
 
 save_manuscript_copy <- function(from_file, figure_name) {
   if (!file.exists(from_file)) return(invisible(NULL))
-  
+
   to_file <- file.path(manuscript_figures_path, figure_name)
-  
+
+  # In one-folder output mode, the source figure is usually already in the
+  # destination folder. Do not attempt to copy a file onto itself.
   if (identical(
     normalizePath(from_file, winslash = "/", mustWork = FALSE),
     normalizePath(to_file, winslash = "/", mustWork = FALSE)
   )) {
     return(invisible(to_file))
   }
-  
+
   file.copy(from = from_file, to = to_file, overwrite = TRUE)
   invisible(to_file)
 }
@@ -461,23 +498,23 @@ clean_id <- function(x) trimws(as.character(x))
 
 coerce_group_12 <- function(g) {
   g0 <- as.character(g)
-  
+
   if (all(g0 %in% c("1", "2"))) {
     return(as.integer(g0))
   }
-  
+
   g_low <- tolower(g0)
-  
+
   if (all(g_low %in% c("normal", "tumor", "non", "lscc", "cancer", "margin"))) {
     return(ifelse(g_low %in% c("tumor", "lscc", "cancer"), 2L, 1L))
   }
-  
+
   u <- sort(unique(g0))
-  
+
   if (length(u) != 2) {
     stop("group must have exactly 2 classes. Found: ", paste(u, collapse = ", "))
   }
-  
+
   map <- setNames(c(1L, 2L), u)
   as.integer(map[g0])
 }
@@ -536,7 +573,7 @@ make_clean_panel_img <- function(path,
   img <- magick::image_read(path)
   img <- magick::image_background(img, FIG_BACKGROUND, flatten = TRUE)
   img <- magick::image_trim(img)
-  
+
   img <- magick::image_resize(
     img,
     geometry = paste0(
@@ -544,20 +581,21 @@ make_clean_panel_img <- function(path,
       panel_height - PANEL_CONTENT_VERTICAL_INSET_PX, ">"
     )
   )
-  
+
   img <- magick::image_extent(
     img,
     geometry = paste0(panel_width, "x", panel_height),
     gravity = "center",
     color = FIG_BACKGROUND
   )
-  
+
+  # Every raster-combined panel has the same thin outer black frame.
   img <- magick::image_border(
     img,
     color = "black",
     geometry = paste0(PANEL_BORDER_RASTER_PX, "x", PANEL_BORDER_RASTER_PX)
   )
-  
+
   add_panel_label_img(
     img = img,
     label = label,
@@ -571,12 +609,12 @@ combine_panels_grid <- function(panel_files, panel_labels, output_file,
   if (length(panel_files) != length(panel_labels)) {
     stop("panel_files and panel_labels must have the same length.")
   }
-  
+
   missing <- panel_files[!file.exists(panel_files)]
   if (length(missing) > 0) {
     stop("Missing panel files:\n", paste(missing, collapse = "\n"))
   }
-  
+
   imgs <- Map(
     function(path, lab) {
       make_clean_panel_img(
@@ -590,7 +628,7 @@ combine_panels_grid <- function(panel_files, panel_labels, output_file,
     panel_files,
     panel_labels
   )
-  
+
   rows <- list()
   row_index <- 1
   for (i in seq(1, length(imgs), by = ncol)) {
@@ -602,37 +640,40 @@ combine_panels_grid <- function(panel_files, panel_labels, output_file,
     rows[[row_index]] <- magick::image_append(do.call(c, row_imgs), stack = FALSE)
     row_index <- row_index + 1
   }
-  
+
   combined <- magick::image_append(do.call(c, rows), stack = TRUE)
   combined <- magick::image_background(combined, "white", flatten = TRUE)
-  
+
   magick::image_write(
     combined,
     path = output_file,
     format = "png",
     density = paste0(FIG_DPI, "x", FIG_DPI)
   )
-  
+
   output_file
 }
 
 common_theme <- theme_manuscript(show_grid = FALSE, legend_position = "right")
 
-# STEP 02: Prepare bulk expression matrices and split datasets.
+cat("\nSTEP 01 finished: setup completed.\n")
+cat("\nFigure-style standard applied: Arial, consistent panel tags, titles, axes, borders, margins, and legends.\n")
+
+# Step 02: raw bulk preprocessing, tmm-cpm, symbol aggregation, split sets
 
 step02_dir <- make_stage_dir(2, "Bulk_Preprocessing_Train_Validation_External")
 
-train1_expr  <- file.path(data_path, "GSE127165_raw_counts_GRCh38.p13_NCBI.csv")
-train2_expr  <- file.path(data_path, "GSE142083_raw_counts_GRCh38.p13_NCBI.csv")
-test_expr    <- file.path(data_path, "GSE130605_raw_counts_GRCh38.p13_NCBI.csv")
+train1_expr  <- file.path(project_path, "GSE127165_raw_counts_GRCh38.p13_NCBI.csv")
+train2_expr  <- file.path(project_path, "GSE142083_raw_counts_GRCh38.p13_NCBI.csv")
+test_expr    <- file.path(project_path, "GSE130605_raw_counts_GRCh38.p13_NCBI.csv")
 
-train1_annot <- file.path(data_path, "GSE127165_annot.csv")
-train2_annot <- file.path(data_path, "GSE142083_annot.csv")
-test_annot   <- file.path(data_path, "GSE130605_annot.csv")
+train1_annot <- file.path(project_path, "GSE127165_annot.csv")
+train2_annot <- file.path(project_path, "GSE142083_annot.csv")
+test_annot   <- file.path(project_path, "GSE130605_annot.csv")
 
-pheno_tr1    <- file.path(data_path, "Pheno_Data_GSE127165.csv")
-pheno_tr2    <- file.path(data_path, "Pheno_Data_GSE142083.csv")
-pheno_te     <- file.path(data_path, "Pheno_Data_GSE130605.csv")
+pheno_tr1    <- file.path(project_path, "Pheno_Data_GSE127165.csv")
+pheno_tr2    <- file.path(project_path, "Pheno_Data_GSE142083.csv")
+pheno_te     <- file.path(project_path, "Pheno_Data_GSE130605.csv")
 
 all_input_files <- c(
   train1_expr, train2_expr, test_expr,
@@ -648,16 +689,16 @@ if (length(missing_input_files) > 0) {
 calc_cpm_tmm_nonnegative <- function(counts_csv, out_csv) {
   X_raw <- data.table::fread(counts_csv, colClasses = c(GeneID = "character"))
   data.table::setnames(X_raw, 1, "GeneID")
-  
+
   cts <- as.matrix(X_raw[, -1, with = FALSE])
   rownames(cts) <- X_raw$GeneID
   mode(cts) <- "numeric"
-  
+
   y <- edgeR::DGEList(counts = cts)
   y <- edgeR::calcNormFactors(y, method = "TMM")
-  
+
   CPM <- edgeR::cpm(y, log = FALSE)
-  
+
   out_dt <- data.table::data.table(GeneID = rownames(CPM), CPM)
   data.table::fwrite(out_dt, out_csv)
   out_csv
@@ -668,15 +709,15 @@ aggregate_geneid_to_symbol <- function(annot_csv, cpm_csv, out_csv) {
     annot_csv,
     colClasses = c(GeneID = "character", Symbol = "character")
   )[, .(GeneID, Symbol)]
-  
+
   dat <- data.table::fread(cpm_csv, colClasses = c(GeneID = "character"))
   M <- merge(ann, dat, by = "GeneID", all.y = TRUE)
   M <- M[!is.na(Symbol) & Symbol != ""]
-  
+
   agg <- M[, lapply(.SD, mean, na.rm = TRUE),
            by = Symbol,
            .SDcols = setdiff(names(M), c("GeneID", "Symbol"))]
-  
+
   data.table::setorder(agg, Symbol)
   data.table::fwrite(agg, out_csv)
   out_csv
@@ -685,14 +726,14 @@ aggregate_geneid_to_symbol <- function(annot_csv, cpm_csv, out_csv) {
 transpose_symbol_matrix <- function(agg_csv, out_csv) {
   A <- data.table::fread(agg_csv)
   data.table::setorder(A, Symbol)
-  
+
   genes <- A$Symbol
   mat <- as.data.frame(t(A[, -1, with = FALSE]))
   colnames(mat) <- genes
   mat$Sample <- rownames(mat)
   rownames(mat) <- NULL
   mat <- mat[, c("Sample", setdiff(names(mat), "Sample"))]
-  
+
   data.table::fwrite(as.data.table(mat), out_csv)
   out_csv
 }
@@ -700,98 +741,119 @@ transpose_symbol_matrix <- function(agg_csv, out_csv) {
 add_metadata_and_batch <- function(trp_csv, pheno_csv, out_csv, batch_value) {
   X  <- data.table::fread(trp_csv)
   ph <- data.table::fread(pheno_csv)
-  
+
   if (!("Sample" %in% names(X))) {
     stop("Transposed file is missing Sample column: ", trp_csv)
   }
-  
+
   X[, Sample := clean_id(Sample)]
-  
+
   smp_col <- guess_sample_col(ph)
   grp_col <- guess_group_col(ph)
-  
+
   data.table::setnames(ph, smp_col, "Sample")
   data.table::setnames(ph, grp_col, "group")
-  
+
   ph[, Sample := clean_id(Sample)]
   ph[, group  := coerce_group_12(group)]
   ph[, batch  := as.integer(batch_value)]
-  
+
   M <- merge(
     ph[, .(Sample, group, batch)],
     X,
     by = "Sample",
     all.y = TRUE
   )
-  
+
   M <- M[
     !is.na(Sample) & Sample != "" &
       !is.na(group) & group %in% c(1, 2),
   ]
-  
+
   M <- M[, c(
     "Sample", "group", "batch",
     setdiff(names(M), c("Sample", "group", "batch"))
   ), with = FALSE]
-  
+
   data.table::fwrite(M, out_csv)
   out_csv
 }
 
 filter_zero_genes_by_rate <- function(input_file, output_file, zero_cutoff = 0) {
   df <- data.table::fread(input_file)
-  
+
   meta_cols <- c("Sample", "group", "batch")
   gene_cols <- setdiff(names(df), meta_cols)
-  
+
   mat <- as.matrix(df[, gene_cols, with = FALSE])
   mode(mat) <- "numeric"
-  
+
   zero_rate <- colMeans(mat == 0, na.rm = TRUE)
   keep_genes <- names(zero_rate)[zero_rate <= zero_cutoff]
-  
+  removed_genes <- names(zero_rate)[zero_rate > zero_cutoff]
+
   if (length(keep_genes) == 0) {
     stop("No genes left after zero filtering. zero_cutoff = ", zero_cutoff)
   }
-  
+
   df_filtered <- df[, c(meta_cols, keep_genes), with = FALSE]
   data.table::fwrite(df_filtered, output_file)
-  
+
+  report <- data.frame(
+    Gene = names(zero_rate),
+    ZeroRate = as.numeric(zero_rate),
+    Status = ifelse(names(zero_rate) %in% keep_genes, "Kept", "Removed")
+  )
+
+  report_file <- sub("\\.csv$", "_zero_filter_report.csv", output_file)
+  data.table::fwrite(report, report_file)
+
+  cat("\nZero filtering:", input_file, "\n")
+  cat("Original genes:", length(gene_cols), "\n")
+  cat("Kept genes:", length(keep_genes), "\n")
+  cat("Removed genes:", length(removed_genes), "\n")
+  cat("Output:", output_file, "\n")
+
   output_file
 }
 
-s2_tr1_cpm <- file.path(step02_dir, "tr1_cpm_geneid.csv")
-s2_tr2_cpm <- file.path(step02_dir, "tr2_cpm_geneid.csv")
-s2_te_cpm  <- file.path(step02_dir, "ext_cpm_geneid.csv")
+# 02.1 TMM-normalized non-negative CPM
+s2_tr1_cpm <- file.path(step02_dir, "GSE127165_TMM_CPM_nonnegative.csv")
+s2_tr2_cpm <- file.path(step02_dir, "GSE142083_TMM_CPM_nonnegative.csv")
+s2_te_cpm  <- file.path(step02_dir, "GSE130605_TMM_CPM_nonnegative.csv")
 
 calc_cpm_tmm_nonnegative(train1_expr, s2_tr1_cpm)
 calc_cpm_tmm_nonnegative(train2_expr, s2_tr2_cpm)
 calc_cpm_tmm_nonnegative(test_expr,   s2_te_cpm)
 
-s2_tr1_sym <- file.path(step02_dir, "tr1_cpm_symbol.csv")
-s2_tr2_sym <- file.path(step02_dir, "tr2_cpm_symbol.csv")
-s2_te_sym  <- file.path(step02_dir, "ext_cpm_symbol.csv")
+# 02.2 GeneID-to-symbol aggregation
+s2_tr1_sym <- file.path(step02_dir, "GSE127165_symbol_CPM.csv")
+s2_tr2_sym <- file.path(step02_dir, "GSE142083_symbol_CPM.csv")
+s2_te_sym  <- file.path(step02_dir, "GSE130605_symbol_CPM.csv")
 
 aggregate_geneid_to_symbol(train1_annot, s2_tr1_cpm, s2_tr1_sym)
 aggregate_geneid_to_symbol(train2_annot, s2_tr2_cpm, s2_tr2_sym)
 aggregate_geneid_to_symbol(test_annot,   s2_te_cpm,  s2_te_sym)
 
-s2_tr1_trp <- file.path(step02_dir, "tr1_cpm_t.csv")
-s2_tr2_trp <- file.path(step02_dir, "tr2_cpm_t.csv")
-s2_te_trp  <- file.path(step02_dir, "ext_cpm_t.csv")
+# 02.3 Transpose matrices: samples as rows, genes as columns
+s2_tr1_trp <- file.path(step02_dir, "GSE127165_transposed_CPM.csv")
+s2_tr2_trp <- file.path(step02_dir, "GSE142083_transposed_CPM.csv")
+s2_te_trp  <- file.path(step02_dir, "GSE130605_transposed_CPM.csv")
 
 transpose_symbol_matrix(s2_tr1_sym, s2_tr1_trp)
 transpose_symbol_matrix(s2_tr2_sym, s2_tr2_trp)
 transpose_symbol_matrix(s2_te_sym,  s2_te_trp)
 
-s2_tr1_meta <- file.path(step02_dir, "tr1_cpm_meta.csv")
-s2_tr2_meta <- file.path(step02_dir, "tr2_cpm_meta.csv")
-s2_te_meta  <- file.path(step02_dir, "ext_cpm_meta.csv")
+# 02.4 Add metadata and forced batch labels
+s2_tr1_meta <- file.path(step02_dir, "GSE127165_meta_CPM.csv")
+s2_tr2_meta <- file.path(step02_dir, "GSE142083_meta_CPM.csv")
+s2_te_meta  <- file.path(step02_dir, "GSE130605_meta_CPM.csv")
 
 add_metadata_and_batch(s2_tr1_trp, pheno_tr1, s2_tr1_meta, batch_value = 1)
 add_metadata_and_batch(s2_tr2_trp, pheno_tr2, s2_tr2_meta, batch_value = 2)
 add_metadata_and_batch(s2_te_trp,  pheno_te,  s2_te_meta,  batch_value = 3)
 
+# 02.5 Merge discovery datasets: GSE127165 + GSE142083
 S_tr1 <- data.table::fread(s2_tr1_meta)
 S_tr2 <- data.table::fread(s2_tr2_meta)
 
@@ -816,10 +878,11 @@ S_tr_merged <- S_tr_merged[
     batch %in% c(1, 2)
 ]
 
-s2_merged_csv <- file.path(step02_dir, "disc_cpm.csv")
+s2_merged_csv <- file.path(step02_dir, "train_discovery_merged_CPM_nonnegative.csv")
 data.table::fwrite(S_tr_merged, s2_merged_csv)
 
-s2_merged_nozero_csv <- file.path(step02_dir, "disc_cpm_nozero.csv")
+# 02.6 Remove genes with any zero value in the discovery cohort
+s2_merged_nozero_csv <- file.path(step02_dir, "train_discovery_merged_CPM_nonnegative_noZero.csv")
 
 filter_zero_genes_by_rate(
   input_file = s2_merged_csv,
@@ -827,6 +890,7 @@ filter_zero_genes_by_rate(
   zero_cutoff = 0
 )
 
+# 02.7 Balanced train/validation split after no-zero filtering
 samples <- as.data.frame(data.table::fread(s2_merged_nozero_csv))
 rownames(samples) <- samples$Sample
 samples <- samples[, setdiff(colnames(samples), "Sample"), drop = FALSE]
@@ -868,12 +932,13 @@ validation_set_cpm <- data.frame(
   check.names = FALSE
 )
 
-training_file_cpm <- file.path(step02_dir, "train_cpm.csv")
-validation_file_cpm <- file.path(step02_dir, "valid_cpm.csv")
+training_file_cpm <- file.path(step02_dir, "training_set_CPM.csv")
+validation_file_cpm <- file.path(step02_dir, "validation_set_CPM.csv")
 
 write.csv(training_set_cpm, training_file_cpm, row.names = FALSE)
 write.csv(validation_set_cpm, validation_file_cpm, row.names = FALSE)
 
+# 02.8 External GSE130605 CPM matched to discovery genes
 external_meta <- data.table::fread(s2_te_meta)
 kept_discovery_genes <- setdiff(colnames(training_set_cpm), c("Sample", "group", "batch"))
 external_common_genes <- intersect(kept_discovery_genes, setdiff(names(external_meta), req_cols))
@@ -883,10 +948,41 @@ if (length(external_common_genes) < 2) {
 }
 
 external_set_cpm <- external_meta[, c(req_cols, external_common_genes), with = FALSE]
-external_file_cpm <- file.path(step02_dir, "ext_cpm.csv")
+external_file_cpm <- file.path(step02_dir, "external_GSE130605_CPM.csv")
 data.table::fwrite(external_set_cpm, external_file_cpm)
 
-# STEP 03: Run differential expression analysis and generate Figure 2.
+split_summary <- data.frame(
+  Set = c("Training", "Validation", "External_GSE130605"),
+  Samples = c(nrow(training_set_cpm), nrow(validation_set_cpm), nrow(external_set_cpm)),
+  Normal = c(
+    sum(training_set_cpm$group == 1),
+    sum(validation_set_cpm$group == 1),
+    sum(external_set_cpm$group == 1)
+  ),
+  Tumor = c(
+    sum(training_set_cpm$group == 2),
+    sum(validation_set_cpm$group == 2),
+    sum(external_set_cpm$group == 2)
+  ),
+  Genes = c(
+    length(setdiff(colnames(training_set_cpm), req_cols)),
+    length(setdiff(colnames(validation_set_cpm), req_cols)),
+    length(setdiff(colnames(external_set_cpm), req_cols))
+  )
+)
+
+write.csv(
+  split_summary,
+  file.path(step02_dir, "Step_02_train_validation_external_summary.csv"),
+  row.names = FALSE
+)
+
+cat("\nSTEP 02 finished: bulk preprocessing and train/validation/external CPM files generated.\n")
+print(split_summary)
+
+# Step 03: log2-cpm, differential expression, and manuscript figure 2
+# IMPORTANT: No batch-effect correction is applied in this pipeline.
+# Batch is retained only as dataset provenance metadata.
 
 step03_dir <- make_stage_dir(3, "Log2CPM_DEG_Figure2_no_batch_correction")
 
@@ -931,6 +1027,8 @@ external_set_cpm <- external_set_cpm[
   drop = FALSE
 ]
 
+# All downstream analyses use log2(TMM-CPM + 1) expression directly.
+# No batch-effect correction is performed.
 train_log2 <- prepare_log2_matrix(training_set_cpm)
 valid_log2 <- prepare_log2_matrix(validation_set_cpm)
 test_log2  <- prepare_log2_matrix(external_set_cpm)
@@ -967,13 +1065,15 @@ external_log2_df <- data.frame(
   check.names = FALSE
 )
 
-train_log2_file <- file.path(step03_dir, "train_log2.csv")
-valid_log2_file <- file.path(step03_dir, "valid_log2.csv")
-external_log2_file <- file.path(step03_dir, "ext_log2.csv")
+train_log2_file <- file.path(step03_dir, "train_log2CPM.csv")
+valid_log2_file <- file.path(step03_dir, "valid_log2CPM.csv")
+external_log2_file <- file.path(step03_dir, "external_GSE130605_log2CPM.csv")
 
 write.csv(train_log2_df, train_log2_file, row.names = FALSE)
 write.csv(valid_log2_df, valid_log2_file, row.names = FALSE)
 write.csv(external_log2_df, external_log2_file, row.names = FALSE)
+
+# DIFFERENTIAL EXPRESSION ANALYSIS ON THE TRAINING SET ONLY
 
 Tr <- data.table::fread(train_log2_file)
 
@@ -1020,32 +1120,34 @@ Bulk_DOWN <- TT_deg %>%
   dplyr::pull(Gene.symbol) %>%
   unique()
 
-write.csv(TT_full, file.path(step03_dir, "deg_all.csv"), row.names = FALSE)
-write.csv(TT_deg, file.path(step03_dir, "deg_sig.csv"), row.names = FALSE)
-writeLines(Bulk_UP, file.path(step03_dir, "deg_up.txt"))
-writeLines(Bulk_DOWN, file.path(step03_dir, "deg_down.txt"))
+write.csv(TT_full, file.path(step03_dir, "DE_topTable_full.csv"), row.names = FALSE)
+write.csv(TT_deg, file.path(step03_dir, "DEG_logFC2_adjP0.01.csv"), row.names = FALSE)
+writeLines(Bulk_UP, file.path(step03_dir, "DEG_up_logFC2_adjP0.01.txt"))
+writeLines(Bulk_DOWN, file.path(step03_dir, "DEG_down_logFC2_adjP0.01.txt"))
+
+# FIGURE 2A: VOLCANO PLOT
 
 TT_plot <- TT_full %>%
   dplyr::mutate(
     neglog10FDR = -log10(
       pmax(adj.P.Val, 1e-300)
     ),
-    
+
     Status = dplyr::case_when(
       adj.P.Val < DEG_FDR_THRESH &
         logFC > DEG_LOGFC_MIN ~ "Up",
-      
+
       adj.P.Val < DEG_FDR_THRESH &
         logFC < -DEG_LOGFC_MIN ~ "Down",
-      
+
       TRUE ~ "NS"
     ),
-    
+
     Status = factor(
       Status,
       levels = c("Up", "Down", "NS")
     )
-    
+
   )
 
 p_fig2a <- ggplot(
@@ -1099,11 +1201,13 @@ p_fig2a <- ggplot(
 
 save_plot_all_formats(
   plot_obj = p_fig2a,
-  filename_stem = "fig02a_volcano",
+  filename_stem = "Figure_02A_DEG_volcano",
   dir_path = FIGURE_DIR,
   width = FIG_SINGLE_W,
   height = FIG_SINGLE_H
 )
+
+# FIGURE 2B: ALL-SIGNIFICANT-DEG HEATMAP
 
 all_deg_gene_pool <- TT_deg %>%
   dplyr::filter(
@@ -1196,10 +1300,12 @@ heatmap_colors <- grDevices::colorRampPalette(
   )
 )(101)
 
-HEATMAP_GROUP_NORMAL <- "#4C78A8"
-HEATMAP_GROUP_TUMOR <- "#D64F7A"
-HEATMAP_REGULATION_DOWN <- "#2A9D8F"
-HEATMAP_REGULATION_UP <- "#F4A261"
+# Figure 2B annotation palettes: phenotype and DEG direction use deliberately
+# different colour families so their legends and annotation bars are distinct.
+HEATMAP_GROUP_NORMAL <- "#4C78A8"      # blue
+HEATMAP_GROUP_TUMOR <- "#D64F7A"       # rose-pink
+HEATMAP_REGULATION_DOWN <- "#2A9D8F"   # teal-green
+HEATMAP_REGULATION_UP <- "#F4A261"     # warm orange
 
 heatmap_annotation_colors <- list(
   Group = c(
@@ -1216,25 +1322,25 @@ p_heatmap_obj <- pheatmap::pheatmap(
   mat = hm_scaled,
   color = heatmap_colors,
   border_color = NA,
-  
+
   cluster_rows = TRUE,
   cluster_cols = FALSE,
   gaps_col = gap_cols,
-  
+
   show_rownames = FALSE,
   show_colnames = FALSE,
-  
+
   annotation_col = ann_col,
   annotation_row = ann_row,
   annotation_colors = heatmap_annotation_colors,
-  
+
   annotation_names_row = FALSE,
   annotation_names_col = FALSE,
-  
+
   fontsize = HEATMAP_FONT_PT,
   fontsize_row = HEATMAP_ROW_FONT_PT,
   fontsize_col = HEATMAP_COL_FONT_PT,
-  
+
   main = "",
   silent = TRUE
 )
@@ -1273,7 +1379,7 @@ heatmap_grob_with_tag <- grid::grobTree(
 
 save_grob_all_formats(
   grob_obj = heatmap_grob_with_tag,
-  filename_stem = "fig02b_heatmap",
+  filename_stem = "Figure_02B_DEG_heatmap_all_DEGs",
   dir_path = FIGURE_DIR,
   width = 10.80,
   height = 8.20
@@ -1282,6 +1388,12 @@ save_grob_all_formats(
 p_fig2b <- patchwork::wrap_elements(
   full = heatmap_grob_with_tag
 )
+
+# MANUSCRIPT FIGURE 2
+
+# a: Volcano plot
+
+# b: All-significant-DEG heatmap
 
 fig2_combined <- patchwork::wrap_plots(
   list(
@@ -1294,13 +1406,22 @@ fig2_combined <- patchwork::wrap_plots(
 
 save_plot_all_formats(
   plot_obj = fig2_combined,
-  filename_stem = "fig02_deg",
+  filename_stem = "Figure_02_DEG_analysis_LavenderPurple_Fuchsia",
   dir_path = FIGURE_DIR,
   width = FIGURE2_COMBINED_W,
   height = FIGURE2_COMBINED_H
 )
 
-# STEP 04: Run WGCNA and generate Figure 3.
+cat("\nSTEP 03 finished: log2-CPM, DEG analysis, and standardized Figure 2 generated.\n")
+cat("No batch-effect correction was applied.\n")
+cat("Total DEGs:", nrow(TT_deg), "\n")
+cat("Upregulated DEGs:", length(Bulk_UP), "\n")
+cat("Downregulated DEGs:", length(Bulk_DOWN), "\n")
+
+# Step 04: wgcna and manuscript figure 3
+# Complete WGCNA section with updated Figure 3 visualization and export settings.
+# Prerequisites: run the preceding pipeline sections first so that the global
+# settings, helper functions, train_log2_file, and package libraries are available.
 
 step04_dir <- make_stage_dir(4, "WGCNA_Figure3")
 
@@ -1367,8 +1488,8 @@ sft_table <- data.frame(
   MeanK = meanK
 )
 
-write.csv(sft_table, file.path(step04_dir, "wgcna_power.csv"), row.names = FALSE)
-writeLines(paste0("Chosen softPower = ", softPower), file.path(step04_dir, "wgcna_power.txt"))
+write.csv(sft_table, file.path(step04_dir, "pickSoftThreshold_full_table.csv"), row.names = FALSE)
+writeLines(paste0("Chosen softPower = ", softPower), file.path(step04_dir, "softPower.txt"))
 
 net <- WGCNA::blockwiseModules(
   datExpr,
@@ -1392,8 +1513,8 @@ MEs <- WGCNA::orderMEs(net$MEs)
 modTraitCor <- cor(MEs, traitDF, use = "p", method = "pearson")
 modTraitPval <- WGCNA::corPvalueStudent(modTraitCor, nrow(datExpr))
 
-write.csv(modTraitCor, file.path(step04_dir, "wgcna_cor.csv"))
-write.csv(modTraitPval, file.path(step04_dir, "wgcna_p.csv"))
+write.csv(modTraitCor, file.path(step04_dir, "module_trait_cor.csv"))
+write.csv(modTraitPval, file.path(step04_dir, "module_trait_pvalue.csv"))
 
 valid_me <- rownames(modTraitCor)
 valid_me <- valid_me[valid_me != "MEgrey"]
@@ -1439,21 +1560,53 @@ if (toupper(WGCNA_RULE) == "AND") {
     unique()
 }
 
-write.csv(mod_table, file.path(step04_dir, paste0(targetModule, "_gs_mm.csv")), row.names = FALSE)
-write.csv(data.frame(Gene = WGCNA_Strong_Tumor_Module_Genes), file.path(step04_dir, "wgcna_genes.csv"), row.names = FALSE)
+write.csv(mod_table, file.path(step04_dir, paste0(targetModule, "_GS_MM_full.csv")), row.names = FALSE)
+write.csv(data.frame(Gene = WGCNA_Strong_Tumor_Module_Genes), file.path(step04_dir, "WGCNA_feature_genes.csv"), row.names = FALSE)
+
+saveRDS(
+  list(
+    datExpr0 = datExpr0,
+    datExpr = datExpr,
+    traitDF = traitDF,
+    sampleTree = sampleTree,
+    sft = sft,
+    sft_table = sft_table,
+    softPower = softPower,
+    net = net,
+    moduleColors_all = moduleColors_all,
+    MEs = MEs,
+    modTraitCor = modTraitCor,
+    modTraitPval = modTraitPval,
+    bestME = bestME,
+    targetModule = targetModule,
+    mod_table = mod_table,
+    WGCNA_Strong_Tumor_Module_Genes = WGCNA_Strong_Tumor_Module_Genes
+  ),
+  file.path(step04_dir, "WGCNA_analysis_objects.rds")
+)
+
+# Figure 3 generation
+
+# WGCNA FIGURE 3 VISUALIZATION SETTINGS AND EXPORTS
+# Uses the global settings defined earlier:
+# FONT_FAMILY, FIG_DPI, FIG_BACKGROUND, COL_NORMAL, COL_TUMOR, COL_NS,
+# AXIS_LWD, GEOM_LWD, PANEL_TAG_PT, theme_manuscript,
+# save_plot_all_formats, and MANUSCRIPT_MARGIN.
+
+# Helper function: export base-R / WGCNA plots as PNG, TIFF, and PDF
 
 save_base_plot_all_formats <- function(draw_fun,
                                        filename_stem,
                                        dir_path,
                                        width,
                                        height) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   grDevices::png(
     filename = png_file,
     width = width,
@@ -1464,7 +1617,7 @@ save_base_plot_all_formats <- function(draw_fun,
   )
   draw_fun()
   grDevices::dev.off()
-  
+
   grDevices::tiff(
     filename = tiff_file,
     width = width,
@@ -1476,7 +1629,7 @@ save_base_plot_all_formats <- function(draw_fun,
   )
   draw_fun()
   grDevices::dev.off()
-  
+
   if (capabilities("cairo")) {
     grDevices::cairo_pdf(
       filename = pdf_file,
@@ -1492,10 +1645,10 @@ save_base_plot_all_formats <- function(draw_fun,
       family = FONT_FAMILY
     )
   }
-  
+
   draw_fun()
   grDevices::dev.off()
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -1505,6 +1658,8 @@ save_base_plot_all_formats <- function(draw_fun,
   )
 }
 
+# Figure 3a: sample clustering dendrogram and trait heatmap
+
 traitColors <- data.frame(
   Tumor = ifelse(traitDF$Tumor == 1, COL_TUMOR, "white"),
   Normal = ifelse(traitDF$Normal == 1, COL_NORMAL, "white"),
@@ -1512,7 +1667,7 @@ traitColors <- data.frame(
 )
 
 draw_fig3a <- function() {
-  
+
   par(
     family = FONT_FAMILY,
     fg = "black",
@@ -1526,7 +1681,7 @@ draw_fig3a <- function() {
     las = 1,
     mar = c(1.2, 4.5, 1.0, 1.0)
   )
-  
+
   WGCNA::plotDendroAndColors(
     sampleTree,
     colors = traitColors,
@@ -1543,7 +1698,7 @@ draw_fig3a <- function() {
 
 save_base_plot_all_formats(
   draw_fun = draw_fig3a,
-  filename_stem = "fig03a_samples",
+  filename_stem = "Figure_03A_WGCNA_sample_dendrogram_trait_heatmap",
   dir_path = step04_dir,
   width = 13.50,
   height = 5.80
@@ -1551,8 +1706,10 @@ save_base_plot_all_formats(
 
 fig3a_file <- file.path(
   step04_dir,
-  "fig03a_samples.png"
+  "Figure_03A_WGCNA_sample_dendrogram_trait_heatmap.png"
 )
+
+# Figure 3b: soft-threshold selection
 
 sft_r2_y <- max(sft_table$SignedR2, na.rm = TRUE)
 sft_k_y  <- max(sft_table$MeanK, na.rm = TRUE)
@@ -1650,7 +1807,7 @@ fig3b_plot <- p_sft1 + p_sft2 +
 
 save_plot_all_formats(
   plot_obj = fig3b_plot,
-  filename_stem = "fig03b_power",
+  filename_stem = "Figure_03B_WGCNA_soft_threshold",
   dir_path = step04_dir,
   width = 9.60,
   height = 4.70
@@ -1658,14 +1815,16 @@ save_plot_all_formats(
 
 fig3b_file <- file.path(
   step04_dir,
-  "fig03b_power.png"
+  "Figure_03B_WGCNA_soft_threshold.png"
 )
+
+# Figure 3c: gene dendrogram and module colors
 
 geneTree <- net$dendrograms[[1]]
 moduleColors_block <- moduleColors_all[net$blockGenes[[1]]]
 
 draw_fig3c <- function() {
-  
+
   par(
     family = FONT_FAMILY,
     fg = "black",
@@ -1679,7 +1838,7 @@ draw_fig3c <- function() {
     las = 1,
     mar = c(1.2, 4.5, 0.8, 1.0)
   )
-  
+
   WGCNA::plotDendroAndColors(
     geneTree,
     colors = moduleColors_block,
@@ -1696,7 +1855,7 @@ draw_fig3c <- function() {
 
 save_base_plot_all_formats(
   draw_fun = draw_fig3c,
-  filename_stem = "fig03c_modules",
+  filename_stem = "Figure_03C_WGCNA_gene_dendrogram_module_colors",
   dir_path = step04_dir,
   width = 8.20,
   height = 5.80
@@ -1704,8 +1863,10 @@ save_base_plot_all_formats(
 
 fig3c_file <- file.path(
   step04_dir,
-  "fig03c_modules.png"
+  "Figure_03C_WGCNA_gene_dendrogram_module_colors.png"
 )
+
+# Figure 3d: module-trait relationship heatmap
 
 textMatrix <- paste0(
   formatC(modTraitCor, format = "f", digits = 2),
@@ -1721,7 +1882,7 @@ wgcna_heatmap_colors <- grDevices::colorRampPalette(
 )(50)
 
 draw_fig3d <- function() {
-  
+
   par(
     family = FONT_FAMILY,
     fg = "black",
@@ -1735,7 +1896,7 @@ draw_fig3d <- function() {
     las = 1,
     mar = c(5.8, 8.3, 1.4, 3.2)
   )
-  
+
   WGCNA::labeledHeatmap(
     Matrix = modTraitCor,
     xLabels = colnames(traitDF),
@@ -1755,7 +1916,7 @@ draw_fig3d <- function() {
 
 save_base_plot_all_formats(
   draw_fun = draw_fig3d,
-  filename_stem = "fig03d_trait",
+  filename_stem = "Figure_03D_WGCNA_module_trait_heatmap",
   dir_path = step04_dir,
   width = 8.50,
   height = 10.20
@@ -1763,8 +1924,9 @@ save_base_plot_all_formats(
 
 fig3d_file <- file.path(
   step04_dir,
-  "fig03d_trait.png"
+  "Figure_03D_WGCNA_module_trait_heatmap.png"
 )
+# Figure 3e: module membership versus gene significance scatter plot
 
 mod_table_plot <- mod_table %>%
   dplyr::mutate(
@@ -1820,7 +1982,7 @@ p_fig3e <- ggplot(
 
 save_plot_all_formats(
   plot_obj = p_fig3e,
-  filename_stem = "fig03e_mm_gs",
+  filename_stem = "Figure_03E_WGCNA_MM_GS_scatter",
   dir_path = step04_dir,
   width = 6.20,
   height = 5.80
@@ -1828,8 +1990,10 @@ save_plot_all_formats(
 
 fig3e_file <- file.path(
   step04_dir,
-  "fig03e_mm_gs.png"
+  "Figure_03E_WGCNA_MM_GS_scatter.png"
 )
+
+# Final manuscript Figure 3: panel combination without image distortion
 
 add_wgcna_panel_label <- function(img,
                                   label,
@@ -1853,7 +2017,7 @@ make_wgcna_panel_img <- function(path,
   img <- magick::image_read(path)
   img <- magick::image_background(img, FIG_BACKGROUND, flatten = TRUE)
   img <- magick::image_trim(img)
-  
+
   img <- magick::image_resize(
     img,
     geometry = paste0(
@@ -1861,20 +2025,20 @@ make_wgcna_panel_img <- function(path,
       panel_height - PANEL_CONTENT_VERTICAL_INSET_PX, ">"
     )
   )
-  
+
   img <- magick::image_extent(
     img,
     geometry = paste0(panel_width, "x", panel_height),
     gravity = "center",
     color = FIG_BACKGROUND
   )
-  
+
   img <- magick::image_border(
     img,
     color = "black",
     geometry = paste0(PANEL_BORDER_RASTER_PX, "x", PANEL_BORDER_RASTER_PX)
   )
-  
+
   add_wgcna_panel_label(
     img = img,
     label = label,
@@ -1932,6 +2096,8 @@ fig3_combined_img <- magick::image_background(
   flatten = TRUE
 )
 
+# Final Figure 3 size for Word: approximately 19 cm high at 600 dpi.
+# Aspect ratio is preserved, leaving room for the caption below the figure.
 FIG3_FINAL_HEIGHT_CM <- 19.0
 FIG3_FINAL_HEIGHT_PX <- round((FIG3_FINAL_HEIGHT_CM / 2.54) * FIG_DPI)
 
@@ -1942,17 +2108,17 @@ fig3_combined_img <- magick::image_resize(
 
 fig3_png_file <- file.path(
   step04_dir,
-  "fig03_wgcna.png"
+  "Figure_03_WGCNA_combined.png"
 )
 
 fig3_tiff_file <- file.path(
   step04_dir,
-  "fig03_wgcna.tiff"
+  "Figure_03_WGCNA_combined.tiff"
 )
 
 fig3_pdf_file <- file.path(
   step04_dir,
-  "fig03_wgcna.pdf"
+  "Figure_03_WGCNA_combined.pdf"
 )
 
 magick::image_write(
@@ -1981,17 +2147,21 @@ try(
 
 save_manuscript_copy(
   fig3_png_file,
-  "fig03_wgcna.png"
+  "Figure_03_WGCNA_combined.png"
 )
 
-# STEP 05: Identify overlapping candidate genes.
+cat("\nSTEP 04 finished: WGCNA and standardized Figure 3 generated.\n")
+cat("Target module:", targetModule, "\n")
+cat("WGCNA feature genes:", length(WGCNA_Strong_Tumor_Module_Genes), "\n")
+
+# Step 05: triple overlap using bulk-up, wgcna, and precomputed scrna markers
 
 if (!exists("results_path", inherits = FALSE)) {
-  results_path <- file.path("Results", "ML")
+  results_path <- "E:/LSCC/Results_LSCC/ML"
 }
 
 if (!exists("scrna_figdir", inherits = FALSE)) {
-  scrna_figdir <- file.path("Results", "scRNAseq", "figures")
+  scrna_figdir <- "E:/LSCC/ScRNAseq_Results/GSE206332/Results/figures"
 }
 
 if (!exists("FIG_DPI", inherits = FALSE)) {
@@ -2033,6 +2203,11 @@ if (!requireNamespace("ggvenn", quietly = TRUE)) {
 if (!requireNamespace("ggplot2", quietly = TRUE)) {
   stop("Package 'ggplot2' is required for Step 05.")
 }
+
+# Downstream standalone helpers
+# These definitions are used only when Steps 05-09 are run in a fresh session
+# after the files from Steps 01-04 already exist. They do not change the
+# full-pipeline behaviour when the script is run from Step 01.
 
 if (.Platform$OS.type == "windows") {
   try(
@@ -2116,7 +2291,7 @@ if (!exists("save_fig", mode = "function", inherits = FALSE)) {
                        height = 6,
                        dpi = FIG_DPI) {
     dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-    
+
     ggplot2::ggsave(
       filename = file.path(dir_path, filename),
       plot = plot_obj,
@@ -2134,16 +2309,16 @@ if (!exists("save_manuscript_copy", mode = "function", inherits = FALSE)) {
     if (!file.exists(from_file)) {
       return(invisible(NULL))
     }
-    
+
     to_file <- file.path(manuscript_figures_path, figure_name)
-    
+
     if (identical(
       normalizePath(from_file, winslash = "/", mustWork = FALSE),
       normalizePath(to_file, winslash = "/", mustWork = FALSE)
     )) {
       return(invisible(to_file))
     }
-    
+
     file.copy(from = from_file, to = to_file, overwrite = TRUE)
     invisible(to_file)
   }
@@ -2177,7 +2352,7 @@ if (!exists("make_clean_panel_img", mode = "function", inherits = FALSE)) {
     img <- magick::image_read(path)
     img <- magick::image_background(img, FIG_BACKGROUND, flatten = TRUE)
     img <- magick::image_trim(img)
-    
+
     img <- magick::image_resize(
       img,
       geometry = paste0(
@@ -2185,20 +2360,21 @@ if (!exists("make_clean_panel_img", mode = "function", inherits = FALSE)) {
         panel_height - PANEL_CONTENT_VERTICAL_INSET_PX, ">"
       )
     )
-    
+
     img <- magick::image_extent(
       img,
       geometry = paste0(panel_width, "x", panel_height),
       gravity = "center",
       color = FIG_BACKGROUND
     )
-    
+
+    # Every raster-combined panel has the same thin outer black frame.
     img <- magick::image_border(
       img,
       color = "black",
       geometry = paste0(PANEL_BORDER_RASTER_PX, "x", PANEL_BORDER_RASTER_PX)
     )
-    
+
     add_panel_label_img(
       img = img,
       label = label,
@@ -2218,15 +2394,15 @@ if (!exists("combine_panels_grid", mode = "function", inherits = FALSE)) {
     if (length(panel_files) != length(panel_labels)) {
       stop("panel_files and panel_labels must have the same length.")
     }
-    
+
     missing <- panel_files[!file.exists(panel_files)]
-    
+
     if (length(missing) > 0) {
       stop("Missing panel files:
 ", paste(missing, collapse = "
 "))
     }
-    
+
     imgs <- Map(
       function(path, lab) {
         make_clean_panel_img(
@@ -2240,13 +2416,13 @@ if (!exists("combine_panels_grid", mode = "function", inherits = FALSE)) {
       panel_files,
       panel_labels
     )
-    
+
     rows <- list()
     row_index <- 1
-    
+
     for (i in seq(1, length(imgs), by = ncol)) {
       row_imgs <- imgs[i:min(i + ncol - 1, length(imgs))]
-      
+
       if (length(row_imgs) < ncol) {
         blank <- magick::image_blank(
           panel_width,
@@ -2255,33 +2431,33 @@ if (!exists("combine_panels_grid", mode = "function", inherits = FALSE)) {
         )
         row_imgs <- c(row_imgs, rep(list(blank), ncol - length(row_imgs)))
       }
-      
+
       rows[[row_index]] <- magick::image_append(
         do.call(c, row_imgs),
         stack = FALSE
       )
-      
+
       row_index <- row_index + 1
     }
-    
+
     combined <- magick::image_append(do.call(c, rows), stack = TRUE)
     combined <- magick::image_background(combined, "white", flatten = TRUE)
-    
+
     magick::image_write(
       combined,
       path = output_file,
       format = "png",
       density = paste0(FIG_DPI, "x", FIG_DPI)
     )
-    
+
     output_file
   }
 }
 
 step05_dir <- make_stage_dir(5, "Triple_Overlap_Figure5A")
 
-bulk_up_file <- file.path(step03_dir, "deg_up.txt")
-wgcna_file   <- file.path(step04_dir, "wgcna_genes.csv")
+bulk_up_file <- file.path(step03_dir, "DEG_up_logFC2_adjP0.01.txt")
+wgcna_file   <- file.path(step04_dir, "WGCNA_feature_genes.csv")
 
 sc_marker_file_candidates <- c(
   file.path(scrna_figdir, "High_CNV_Malignant_marker_genes_after_lowCNV_removed_logFC1.txt"),
@@ -2296,7 +2472,7 @@ safe_read_gene_list <- function(path) {
   if (is.na(path) || !file.exists(path)) {
     return(character(0))
   }
-  
+
   if (grepl("\\.csv$", path, ignore.case = TRUE)) {
     dt <- data.table::fread(path)
     gene_col <- intersect(
@@ -2310,7 +2486,7 @@ safe_read_gene_list <- function(path) {
   } else {
     x <- readLines(path, warn = FALSE)
   }
-  
+
   clean_gene_vector(x)
 }
 
@@ -2321,7 +2497,7 @@ Bulk_UP <- clean_gene_vector(readLines(bulk_up_file, warn = FALSE))
 
 wgcna_df <- as.data.frame(data.table::fread(wgcna_file))
 if (!"Gene" %in% colnames(wgcna_df)) {
-  stop("wgcna_genes.csv must contain a column named Gene.")
+  stop("WGCNA_feature_genes.csv must contain a column named Gene.")
 }
 
 WGCNA_Strong_Tumor_Module_Genes <- clean_gene_vector(wgcna_df$Gene)
@@ -2354,20 +2530,26 @@ Triple_Overlap_Genes <- sort(unique(Triple_Overlap_Genes))
 
 write.csv(
   data.frame(Gene = Triple_Overlap_Genes),
-  file.path(step05_dir, "overlap_genes.csv"),
+  file.path(step05_dir, "TripleOverlap_BulkUP_WGCNA_HighCNV_Malignant.csv"),
   row.names = FALSE
 )
 
-writeLines(Triple_Overlap_Genes, file.path(step05_dir, "overlap_genes.txt"))
+writeLines(Triple_Overlap_Genes, file.path(step05_dir, "TripleOverlap_genes.txt"))
 
 if (length(Triple_Overlap_Genes) < 2) {
   stop("Too few triple-overlap genes for LASSO. Check DEG/WGCNA/scRNA thresholds.")
 }
 
-# STEP 06: Perform LASSO feature selection.
+# Figure 5A rendering is generated in the standardized Figure 5 section below.
+
+cat("\nSTEP 05 finished: triple overlap generated.\n")
+cat("Triple-overlap genes:", length(Triple_Overlap_Genes), "\n")
+
+# Step 06: lasso feature selection and figure 5b
+# using the log2-CPM files previously generated by Step 03.
 
 if (!exists("results_path", inherits = FALSE)) {
-  results_path <- file.path("Results", "ML")
+  results_path <- "E:/LSCC/Results_LSCC/ML"
 }
 
 if (!exists("FIG_DPI", inherits = FALSE)) {
@@ -2402,23 +2584,23 @@ if (!exists("to_numeric_df", mode = "function", inherits = FALSE)) {
 if (!exists("coerce_group_12", mode = "function", inherits = FALSE)) {
   coerce_group_12 <- function(g) {
     g0 <- as.character(g)
-    
+
     if (all(g0 %in% c("1", "2"))) {
       return(as.integer(g0))
     }
-    
+
     g_low <- tolower(g0)
-    
+
     if (all(g_low %in% c("normal", "tumor", "non", "lscc", "cancer", "margin"))) {
       return(ifelse(g_low %in% c("tumor", "lscc", "cancer"), 2L, 1L))
     }
-    
+
     u <- sort(unique(g0))
-    
+
     if (length(u) != 2) {
       stop("group must have exactly 2 classes. Found: ", paste(u, collapse = ", "))
     }
-    
+
     map <- setNames(c(1L, 2L), u)
     as.integer(map[g0])
   }
@@ -2431,18 +2613,19 @@ if (!exists("make_group_factor", mode = "function", inherits = FALSE)) {
   }
 }
 
+# Restore the Step 03 output paths when Step 06 is run independently.
 if (!exists("train_log2_file", inherits = FALSE)) {
-  train_log2_file <- file.path(results_path, "train_log2.csv")
+  train_log2_file <- file.path(results_path, "train_log2CPM.csv")
 }
 
 if (!exists("valid_log2_file", inherits = FALSE)) {
-  valid_log2_file <- file.path(results_path, "valid_log2.csv")
+  valid_log2_file <- file.path(results_path, "valid_log2CPM.csv")
 }
 
 if (!exists("external_log2_file", inherits = FALSE)) {
   external_log2_file <- file.path(
     results_path,
-    "ext_log2.csv"
+    "external_GSE130605_log2CPM.csv"
   )
 }
 
@@ -2486,7 +2669,7 @@ step06_dir <- make_stage_dir(6, "LASSO_Figure5B")
 
 LASSO_NFOLDS <- 10
 
-triple_file <- file.path(step05_dir, "overlap_genes.txt")
+triple_file <- file.path(step05_dir, "TripleOverlap_genes.txt")
 Triple_Overlap_Genes <- clean_gene_vector(readLines(triple_file, warn = FALSE))
 
 if (length(Triple_Overlap_Genes) < 2) {
@@ -2515,10 +2698,10 @@ if (length(common_model_genes) < 2) {
 
 write.csv(
   data.frame(Gene = common_model_genes),
-  file.path(step06_dir, "lasso_input_genes.csv"),
+  file.path(step06_dir, "Genes_entering_LASSO_from_triple_overlap.csv"),
   row.names = FALSE
 )
-writeLines(common_model_genes, file.path(step06_dir, "lasso_input_genes.txt"))
+writeLines(common_model_genes, file.path(step06_dir, "Genes_entering_LASSO_from_triple_overlap.txt"))
 
 trainX <- as.matrix(to_numeric_df(train_df[, common_model_genes, drop = FALSE]))
 validX <- as.matrix(to_numeric_df(valid_df[, common_model_genes, drop = FALSE]))
@@ -2549,6 +2732,8 @@ cv_lasso <- glmnet::cv.glmnet(
   nfolds = nfolds_use
 )
 
+# Figure 5B rendering is generated in the standardized Figure 5 section below.
+
 fit_lasso <- glmnet::glmnet(
   x = x,
   y = y,
@@ -2574,15 +2759,28 @@ if (nrow(lasso_coef_table) < 1) {
 
 write.csv(
   lasso_coef_table,
-  file.path(step06_dir, "lasso_coef.csv"),
+  file.path(step06_dir, "Final_LASSO_coefficients_lambda_min.csv"),
   row.names = FALSE
 )
 
-writeLines(lasso_coef_table$Gene, file.path(step06_dir, "lasso_genes.txt"))
+writeLines(lasso_coef_table$Gene, file.path(step06_dir, "Final_LASSO_genes.txt"))
 
 lasso_genes <- lasso_coef_table$Gene
 
-# STEP 07: Perform internal ROC analysis.
+lasso_summary <- data.frame(
+  Input_gene_count = length(common_model_genes),
+  Selected_gene_count = length(lasso_genes),
+  Lambda_min = cv_lasso$lambda.min,
+  Lambda_1se = cv_lasso$lambda.1se,
+  Nfolds = nfolds_use
+)
+
+write.csv(lasso_summary, file.path(step06_dir, "LASSO_summary.csv"), row.names = FALSE)
+
+cat("\nSTEP 06 finished: LASSO feature selection generated.\n")
+print(lasso_coef_table)
+
+# Step 07: internal roc analysis and figure 5c
 
 step07_dir <- make_stage_dir(7, "Internal_ROC_Figure5C")
 
@@ -2591,13 +2789,13 @@ ROC_AUC_MIN <- 0.95
 calc_gene_auc <- function(expr, group_factor) {
   group_factor <- factor(group_factor, levels = c("Normal", "Tumor"))
   expr <- as.numeric(expr)
-  
+
   ok <- is.finite(expr) & !is.na(group_factor)
-  
+
   if (sum(ok) < 3 || length(unique(group_factor[ok])) < 2) {
     return(NA_real_)
   }
-  
+
   roc_obj <- pROC::roc(
     response = group_factor[ok],
     predictor = expr[ok],
@@ -2605,13 +2803,13 @@ calc_gene_auc <- function(expr, group_factor) {
     direction = "<",
     quiet = TRUE
   )
-  
+
   as.numeric(roc_obj$auc)
 }
 
-lasso_genes <- clean_gene_vector(readLines(file.path(step06_dir, "lasso_genes.txt"), warn = FALSE))
+lasso_genes <- clean_gene_vector(readLines(file.path(step06_dir, "Final_LASSO_genes.txt"), warn = FALSE))
 
-common_model_genes <- clean_gene_vector(readLines(file.path(step06_dir, "lasso_input_genes.txt"), warn = FALSE))
+common_model_genes <- clean_gene_vector(readLines(file.path(step06_dir, "Genes_entering_LASSO_from_triple_overlap.txt"), warn = FALSE))
 common_model_genes <- Reduce(
   intersect,
   list(
@@ -2659,7 +2857,7 @@ roc_table <- lapply(lasso_genes, function(g) {
   ) %>%
   dplyr::arrange(dplyr::desc(Pass_ROC_Cutoff), dplyr::desc(Minimum_AUC))
 
-write.csv(roc_table, file.path(step07_dir, "lasso_auc.csv"), row.names = FALSE)
+write.csv(roc_table, file.path(step07_dir, "ROC_AUC_table_LASSO_genes.csv"), row.names = FALSE)
 
 final_biomarkers <- roc_table %>%
   dplyr::filter(Pass_ROC_Cutoff) %>%
@@ -2668,7 +2866,7 @@ final_biomarkers <- roc_table %>%
 if (length(final_biomarkers) < 1) {
   write.csv(
     roc_table,
-    file.path(step07_dir, "lasso_auc_none.csv"),
+    file.path(step07_dir, "ROC_AUC_table_LASSO_genes_NO_GENE_PASSED_0.95.csv"),
     row.names = FALSE
   )
   stop(
@@ -2679,15 +2877,20 @@ if (length(final_biomarkers) < 1) {
   )
 }
 
-writeLines(final_biomarkers, file.path(step07_dir, "biomarkers.txt"))
+writeLines(final_biomarkers, file.path(step07_dir, "FINAL_BIOMARKERS.txt"))
 
 write.csv(
   roc_table %>% dplyr::filter(Gene %in% final_biomarkers),
-  file.path(step07_dir, "biomarkers_auc.csv"),
+  file.path(step07_dir, "FINAL_BIOMARKERS_AUC_table.csv"),
   row.names = FALSE
 )
 
-# STEP 08: Validate biomarker expression and generate Figure 5.
+# Figure 5C rendering is generated in the standardized Figure 5 section below.
+
+cat("\nSTEP 07 finished: internal ROC statistics generated.\n")
+print(roc_table)
+
+# Step 08: expression validation boxplots and manuscript figure 5
 
 step08_dir <- make_stage_dir(8, "Expression_Boxplots_Figure5D_and_Combined_Figure5")
 
@@ -2706,16 +2909,16 @@ build_long_df <- function(df, dataset_name, genes) {
     genes,
     setdiff(colnames(df), c("Sample", "group", "batch"))
   )
-  
+
   if (length(genes_present) < 1) {
     return(data.frame())
   }
-  
+
   tmp <- df[, c("Sample", "group", genes_present), drop = FALSE]
   tmp$Group <- make_group_factor(tmp$group)
   tmp$Dataset <- dataset_name
   tmp$group <- NULL
-  
+
   long_df <- tmp %>%
     tidyr::pivot_longer(
       cols = all_of(genes_present),
@@ -2728,13 +2931,13 @@ build_long_df <- function(df, dataset_name, genes) {
       Group = factor(Group, levels = c("Normal", "Tumor"))
     ) %>%
     dplyr::filter(is.finite(Expression))
-  
+
   as.data.frame(long_df)
 }
 
-final_biomarkers <- clean_gene_vector(readLines(file.path(step07_dir, "biomarkers.txt"), warn = FALSE))
+final_biomarkers <- clean_gene_vector(readLines(file.path(step07_dir, "FINAL_BIOMARKERS.txt"), warn = FALSE))
 
-writeLines(final_biomarkers, file.path(step08_dir, "expr_genes.txt"))
+writeLines(final_biomarkers, file.path(step08_dir, "Final_biomarkers_used_for_expression_boxplot.txt"))
 
 expr_long <- dplyr::bind_rows(
   build_long_df(train_df, "Training", final_biomarkers),
@@ -2747,7 +2950,7 @@ if (nrow(expr_long) < 1) {
 
 expr_long$Gene <- factor(expr_long$Gene, levels = final_biomarkers)
 
-write.csv(expr_long, file.path(step08_dir, "expr_long.csv"), row.names = FALSE)
+write.csv(expr_long, file.path(step08_dir, "Final_biomarker_expression_long_table.csv"), row.names = FALSE)
 
 pval_df <- expr_long %>%
   dplyr::group_by(Gene, Dataset) %>%
@@ -2764,15 +2967,54 @@ pval_df <- expr_long %>%
     p_label = vapply(Wilcoxon_p, format_p_value, character(1))
   )
 
+expr_summary <- expr_long %>%
+  dplyr::group_by(Gene, Dataset, Group) %>%
+  dplyr::summarise(
+    Median = median(Expression, na.rm = TRUE),
+    Mean = mean(Expression, na.rm = TRUE),
+    SD = sd(Expression, na.rm = TRUE),
+    N = dplyr::n(),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(names_from = Group, values_from = c(Median, Mean, SD, N)) %>%
+  dplyr::left_join(
+    pval_df %>% dplyr::select(Gene, Dataset, Wilcoxon_p),
+    by = c("Gene", "Dataset")
+  )
+
+write.csv(expr_summary, file.path(step08_dir, "Final_biomarker_expression_validation_summary.csv"), row.names = FALSE)
+
+# Figure 5D and the combined Figure 5 are generated in the standardized Figure 5 section below.
+
+cat("\nSTEP 08 finished: expression-validation tables generated.\n")
+packageVersion("glmnet")
+packageVersion("pROC")
+
+# Figure 5 generation
+# - Panel a has compact multiline Venn labels on a wider canvas.
+# - Panel b has separated lambda labels and extra width in the combined figure.
+# - Panel d is enlarged with a wide, correctly proportioned region in the
+#   final combined figure layout.
+# or expression testing. The CV-LASSO fit is reconstructed in memory solely
+# to redraw Figure 5B and does not alter any existing analysis output file.
+
+# Objects and files generated in Steps 05–08 are retained for this figure section.
+
 options(stringsAsFactors = FALSE, scipen = 100, width = 140)
 set.seed(123)
 
-results_path <- file.path("Results", "ML")
+# Figure 5 paths
+
+results_path <- "E:/LSCC/Results_LSCC/ML"
 FIGURE_DIR <- results_path
 
-scrna_figdir <- file.path("Results", "scRNAseq", "figures")
+scrna_figdir <- "E:/LSCC/ScRNAseq_Results/GSE206332/Results/figures"
 
 dir.create(FIGURE_DIR, recursive = TRUE, showWarnings = FALSE)
+
+# STANDARD MANUSCRIPT FIGURE SETTINGS
+
+# Fonts and export quality
 
 if (.Platform$OS.type == "windows") {
   try(
@@ -2787,14 +3029,21 @@ FONT_FAMILY <- "Arial"
 FIG_DPI <- 600
 FIG_BACKGROUND <- "white"
 
+# Standard manuscript figure dimensions (inches)
+
 FIG_SINGLE_W <- 3.50
 FIG_SINGLE_H <- 4.20
 
 FIG_DOUBLE_W <- 7.20
 FIG_DOUBLE_H <- 5.40
 
+# Final combined Figure 2:
+# Wider and shorter to avoid an overly elongated layout.
+
 FIGURE2_COMBINED_W <- 14.00
 FIGURE2_COMBINED_H <- 6.40
+
+# Typography (pt)
 
 BASE_TEXT_PT <- 9.5
 
@@ -2807,18 +3056,26 @@ LEGEND_TITLE_PT <- 9
 PLOT_TITLE_PT <- 10
 PANEL_TAG_PT <- 14
 
+# Line widths
+
 PANEL_BORDER_LWD <- 0.45
 AXIS_LWD <- 0.40
 GEOM_LWD <- 0.55
 GRID_LWD <- 0.30
+
+# Heatmap typography
 
 HEATMAP_FONT_PT <- 8
 HEATMAP_ROW_FONT_PT <- 7
 HEATMAP_COL_FONT_PT <- 7
 HEATMAP_LEGEND_FONT_PT <- 8
 
+# Repeated semantic colours
+
+# Lavender-purple for Normal / Downregulated signals
 COL_NORMAL <- "#7470B2"
 
+# Fuchsia-magenta for Tumor / Upregulated signals
 COL_TUMOR <- "#D81B60"
 
 COL_MYBL2_LOW <- COL_NORMAL
@@ -2828,14 +3085,19 @@ COL_UP <- COL_TUMOR
 COL_DOWN <- COL_NORMAL
 COL_NS <- "#B8B8B8"
 
+# Fixed green-blue palette for CellChat plots
 CELLCHAT_PALETTE <- grDevices::colorRampPalette(
   c("#E8F6F4", "#B8E1DA", "#73C6BE", "#2D9D8C", "#006E63")
 )(100)
 
+# Additional figure-only colour used for the WGCNA set in the Venn diagram
 COL_WGCNA <- "#2D9D8C"
 
+# Lighter fills for Normal and Tumor boxplots
 NORMAL_FILL <- "#DDD9EE"
 TUMOR_FILL <- "#F5C6D8"
+
+# Standard plot margins
 
 MANUSCRIPT_MARGIN <- ggplot2::margin(
   t = 5.5,
@@ -2845,9 +3107,11 @@ MANUSCRIPT_MARGIN <- ggplot2::margin(
   unit = "pt"
 )
 
+# Standard ggplot theme
+
 theme_manuscript <- function(show_grid = FALSE,
                              legend_position = "right") {
-  
+
   ggplot2::theme_bw(
     base_size = BASE_TEXT_PT,
     base_family = FONT_FAMILY
@@ -2857,7 +3121,7 @@ theme_manuscript <- function(show_grid = FALSE,
         family = FONT_FAMILY,
         color = "black"
       ),
-      
+
       plot.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -2867,7 +3131,7 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.title.position = "panel",
-      
+
       plot.tag = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -2877,7 +3141,7 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.tag.position = PANEL_TAG_POSITION,
-      
+
       axis.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -2898,7 +3162,7 @@ theme_manuscript <- function(show_grid = FALSE,
         linewidth = AXIS_LWD
       ),
       axis.ticks.length = grid::unit(TICK_LENGTH_PT, "pt"),
-      
+
       legend.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -2919,7 +3183,7 @@ theme_manuscript <- function(show_grid = FALSE,
         fill = FIG_BACKGROUND,
         color = NA
       ),
-      
+
       panel.background = ggplot2::element_rect(
         fill = FIG_BACKGROUND,
         color = NA
@@ -2942,7 +3206,7 @@ theme_manuscript <- function(show_grid = FALSE,
         ggplot2::element_blank()
       },
       panel.grid.minor = ggplot2::element_blank(),
-      
+
       strip.background = ggplot2::element_rect(
         fill = "grey95",
         color = "black",
@@ -2954,24 +3218,26 @@ theme_manuscript <- function(show_grid = FALSE,
         size = AXIS_TEXT_PT,
         color = "black"
       ),
-      
+
       panel.spacing = grid::unit(PANEL_SPACING_PT, "pt"),
       plot.margin = MANUSCRIPT_MARGIN
     )
 }
+
+# Export each ggplot as PNG, TIFF, and vector PDF
 
 save_plot_all_formats <- function(plot_obj,
                                   filename_stem,
                                   dir_path,
                                   width = FIG_DOUBLE_W,
                                   height = FIG_DOUBLE_H) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   ggplot2::ggsave(
     filename = png_file,
     plot = plot_obj,
@@ -2981,7 +3247,7 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   ggplot2::ggsave(
     filename = tiff_file,
     plot = plot_obj,
@@ -2992,13 +3258,13 @@ save_plot_all_formats <- function(plot_obj,
     compression = "lzw",
     limitsize = FALSE
   )
-  
+
   pdf_device <- if (capabilities("cairo")) {
     grDevices::cairo_pdf
   } else {
     grDevices::pdf
   }
-  
+
   ggplot2::ggsave(
     filename = pdf_file,
     plot = plot_obj,
@@ -3008,7 +3274,7 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -3018,18 +3284,20 @@ save_plot_all_formats <- function(plot_obj,
   )
 }
 
+# Export base-R plots as PNG, TIFF, and PDF
+
 save_base_plot_all_formats <- function(draw_fun,
                                        filename_stem,
                                        dir_path,
                                        width = FIG_DOUBLE_W,
                                        height = FIG_DOUBLE_H) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   grDevices::png(
     filename = png_file,
     width = width,
@@ -3040,7 +3308,7 @@ save_base_plot_all_formats <- function(draw_fun,
   )
   draw_fun()
   grDevices::dev.off()
-  
+
   grDevices::tiff(
     filename = tiff_file,
     width = width,
@@ -3052,7 +3320,7 @@ save_base_plot_all_formats <- function(draw_fun,
   )
   draw_fun()
   grDevices::dev.off()
-  
+
   if (capabilities("cairo")) {
     grDevices::cairo_pdf(
       filename = pdf_file,
@@ -3070,7 +3338,7 @@ save_base_plot_all_formats <- function(draw_fun,
   }
   draw_fun()
   grDevices::dev.off()
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -3080,30 +3348,32 @@ save_base_plot_all_formats <- function(draw_fun,
   )
 }
 
+# Export the final raster-combined figure as PNG, TIFF, and PDF
+
 save_magick_all_formats <- function(image_object,
                                     filename_stem,
                                     dir_path) {
-  
+
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   magick::image_write(
     image_object,
     path = png_file,
     format = "png",
     density = paste0(FIG_DPI, "x", FIG_DPI)
   )
-  
+
   magick::image_write(
     image_object,
     path = tiff_file,
     format = "tiff",
     density = paste0(FIG_DPI, "x", FIG_DPI)
   )
-  
+
   try(
     magick::image_write(
       image_object,
@@ -3113,7 +3383,7 @@ save_magick_all_formats <- function(image_object,
     ),
     silent = TRUE
   )
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -3122,6 +3392,8 @@ save_magick_all_formats <- function(image_object,
     )
   )
 }
+
+# Figure 5 packages
 
 required_packages <- c(
   "data.table",
@@ -3163,6 +3435,8 @@ suppressPackageStartupMessages({
   library(magick)
 })
 
+# Figure 5 helper functions
+
 clean_gene_vector <- function(x) {
   x <- unique(trimws(as.character(x)))
   x[!is.na(x) & x != ""]
@@ -3177,13 +3451,13 @@ to_numeric_df <- function(df) {
 
 coerce_group_12 <- function(g) {
   g0 <- as.character(g)
-  
+
   if (all(g0 %in% c("1", "2"))) {
     return(as.integer(g0))
   }
-  
+
   g_low <- tolower(g0)
-  
+
   if (all(g_low %in% c("normal", "tumor", "non", "lscc", "cancer", "margin"))) {
     return(
       ifelse(
@@ -3193,16 +3467,16 @@ coerce_group_12 <- function(g) {
       )
     )
   }
-  
+
   u <- sort(unique(g0))
-  
+
   if (length(u) != 2) {
     stop(
       "group must have exactly 2 classes. Found: ",
       paste(u, collapse = ", ")
     )
   }
-  
+
   map <- setNames(c(1L, 2L), u)
   as.integer(map[g0])
 }
@@ -3215,11 +3489,11 @@ make_group_factor <- function(g) {
 first_existing <- function(paths) {
   paths <- unique(paths)
   paths <- paths[file.exists(paths)]
-  
+
   if (length(paths) < 1) {
     return(NA_character_)
   }
-  
+
   paths[1]
 }
 
@@ -3227,28 +3501,28 @@ safe_read_gene_list <- function(path) {
   if (is.na(path) || !file.exists(path)) {
     return(character(0))
   }
-  
+
   if (grepl("\\.csv$", path, ignore.case = TRUE)) {
     dat <- as.data.frame(
       data.table::fread(path),
       check.names = FALSE
     )
-    
+
     gene_column <- intersect(
       c("Gene", "Genes", "gene", "Gene.symbol", "Symbol", "symbol"),
       colnames(dat)
     )
-    
+
     if (length(gene_column) < 1) {
       return(character(0))
     }
-    
+
     genes <- dat[[gene_column[1]]]
-    
+
   } else {
     genes <- readLines(path, warn = FALSE)
   }
-  
+
   clean_gene_vector(genes)
 }
 
@@ -3257,7 +3531,7 @@ save_fig <- function(plot_obj,
                      dir_path,
                      width = FIG_DOUBLE_W,
                      height = FIG_DOUBLE_H) {
-  
+
   save_plot_all_formats(
     plot_obj = plot_obj,
     filename_stem = tools::file_path_sans_ext(filename),
@@ -3292,7 +3566,7 @@ make_clean_panel_img <- function(path,
   img <- magick::image_read(path)
   img <- magick::image_background(img, FIG_BACKGROUND, flatten = TRUE)
   img <- magick::image_trim(img)
-  
+
   img <- magick::image_resize(
     img,
     geometry = paste0(
@@ -3300,20 +3574,21 @@ make_clean_panel_img <- function(path,
       panel_height - PANEL_CONTENT_VERTICAL_INSET_PX, ">"
     )
   )
-  
+
   img <- magick::image_extent(
     img,
     geometry = paste0(panel_width, "x", panel_height),
     gravity = "center",
     color = FIG_BACKGROUND
   )
-  
+
+  # Every raster-combined panel has the same thin outer black frame.
   img <- magick::image_border(
     img,
     color = "black",
     geometry = paste0(PANEL_BORDER_RASTER_PX, "x", PANEL_BORDER_RASTER_PX)
   )
-  
+
   add_panel_label_img(
     img = img,
     label = label,
@@ -3321,44 +3596,46 @@ make_clean_panel_img <- function(path,
   )
 }
 
+# Required Figure 5 inputs
+
 bulk_up_file <- file.path(
   results_path,
-  "deg_up.txt"
+  "DEG_up_logFC2_adjP0.01.txt"
 )
 
 wgcna_file <- file.path(
   results_path,
-  "wgcna_genes.csv"
+  "WGCNA_feature_genes.csv"
 )
 
 triple_file <- file.path(
   results_path,
-  "overlap_genes.txt"
+  "TripleOverlap_genes.txt"
 )
 
 lasso_genes_file <- file.path(
   results_path,
-  "lasso_genes.txt"
+  "Final_LASSO_genes.txt"
 )
 
 final_biomarkers_file <- file.path(
   results_path,
-  "biomarkers.txt"
+  "FINAL_BIOMARKERS.txt"
 )
 
 train_log2_file <- file.path(
   results_path,
-  "train_log2.csv"
+  "train_log2CPM.csv"
 )
 
 valid_log2_file <- file.path(
   results_path,
-  "valid_log2.csv"
+  "valid_log2CPM.csv"
 )
 
 external_log2_file <- file.path(
   results_path,
-  "ext_log2.csv"
+  "external_GSE130605_log2CPM.csv"
 )
 
 required_files <- c(
@@ -3417,6 +3694,8 @@ if (is.na(sc_marker_file)) {
   )
 }
 
+# Load Figure 5 inputs
+
 Bulk_UP <- clean_gene_vector(
   readLines(bulk_up_file, warn = FALSE)
 )
@@ -3427,7 +3706,7 @@ wgcna_df <- as.data.frame(
 )
 
 if (!("Gene" %in% colnames(wgcna_df))) {
-  stop("wgcna_genes.csv must contain a column named 'Gene'.")
+  stop("WGCNA_feature_genes.csv must contain a column named 'Gene'.")
 }
 
 WGCNA_Strong_Tumor_Module_Genes <- clean_gene_vector(
@@ -3465,6 +3744,9 @@ test_df <- as.data.frame(
   check.names = FALSE
 )
 
+# FIGURE 5A. TRIPLE-OVERLAP VENN DIAGRAM
+
+# Compact multiline labels prevent overlap among the three Venn-set names.
 sets3 <- list(
   "Upregulated\nDEGs" = Bulk_UP,
   "Tumor-related\nWGCNA genes" = WGCNA_Strong_Tumor_Module_Genes,
@@ -3507,7 +3789,7 @@ p_fig5a <- ggvenn::ggvenn(
 
 save_plot_all_formats(
   plot_obj = p_fig5a,
-  filename_stem = "fig05a_venn",
+  filename_stem = "Figure_05A_Triple_overlap_Venn",
   dir_path = FIGURE_DIR,
   width = FIG_DOUBLE_W,
   height = FIG_DOUBLE_H
@@ -3515,8 +3797,12 @@ save_plot_all_formats(
 
 fig5a_file <- file.path(
   FIGURE_DIR,
-  "fig05a_venn.png"
+  "Figure_05A_Triple_overlap_Venn.png"
 )
+
+# FIGURE 5B. LASSO CROSS-VALIDATION CURVE
+# The model is reconstructed in memory from existing Step 03/05 outputs only
+# so that the original CV curve can be re-exported with standardized settings.
 
 common_model_genes <- Reduce(
   intersect,
@@ -3558,7 +3844,7 @@ cv_lasso <- glmnet::cv.glmnet(
 )
 
 draw_fig5b <- function() {
-  
+
   par(
     family = FONT_FAMILY,
     fg = "black",
@@ -3572,22 +3858,24 @@ draw_fig5b <- function() {
     las = 1,
     mar = c(4.2, 4.5, 1.1, 1.0)
   )
-  
+
   plot(
     cv_lasso,
     xlab = "log(λ)",
     ylab = "Binomial deviance",
     main = ""
   )
-  
+
   plot_usr <- par("usr")
-  
+
   lambda_1se_x <- -log(cv_lasso$lambda.1se)
   lambda_min_x <- -log(cv_lasso$lambda.min)
-  
+
+  # Put the labels on opposite sides of the two reference lines so they do
+  # not overlap even when lambda.min and lambda.1se are close together.
   label_y_low <- plot_usr[3] + 0.075 * diff(plot_usr[3:4])
   label_y_high <- plot_usr[4] - 0.060 * diff(plot_usr[3:4])
-  
+
   text(
     x = lambda_1se_x,
     y = label_y_high,
@@ -3597,7 +3885,7 @@ draw_fig5b <- function() {
     cex = BASE_ANNOTATION_CEX,
     col = "black"
   )
-  
+
   text(
     x = lambda_min_x,
     y = label_y_low,
@@ -3611,7 +3899,7 @@ draw_fig5b <- function() {
 
 save_base_plot_all_formats(
   draw_fun = draw_fig5b,
-  filename_stem = "fig05b_lasso",
+  filename_stem = "Figure_05B_LASSO_cv_curve",
   dir_path = FIGURE_DIR,
   width = FIG_DOUBLE_W,
   height = FIG_DOUBLE_H
@@ -3619,12 +3907,14 @@ save_base_plot_all_formats(
 
 fig5b_file <- file.path(
   FIGURE_DIR,
-  "fig05b_lasso.png"
+  "Figure_05B_LASSO_cv_curve.png"
 )
+
+# FIGURE 5C. INTERNAL ROC CURVES
 
 calc_roc_object <- function(expression,
                             group_factor) {
-  
+
   pROC::roc(
     response = group_factor,
     predictor = as.numeric(expression),
@@ -3635,22 +3925,22 @@ calc_roc_object <- function(expression,
 }
 
 make_internal_roc_plot <- function(gene) {
-  
+
   roc_train <- calc_roc_object(
     expression = train_df[[gene]],
     group_factor = make_group_factor(train_df$group)
   )
-  
+
   roc_valid <- calc_roc_object(
     expression = valid_df[[gene]],
     group_factor = make_group_factor(valid_df$group)
   )
-  
+
   roc_list <- list(
     Training = roc_train,
     Validation = roc_valid
   )
-  
+
   pROC::ggroc(
     roc_list,
     legacy.axes = TRUE,
@@ -3728,7 +4018,7 @@ names(roc_plots) <- roc_genes
 
 for (gene in names(roc_plots)) {
   safe_gene_name <- gsub("[^A-Za-z0-9_\\-]", "_", gene)
-  
+
   save_plot_all_formats(
     plot_obj = roc_plots[[gene]],
     filename_stem = paste0("Figure_05C_ROC_", safe_gene_name),
@@ -3744,9 +4034,11 @@ fig5c_combined <- cowplot::plot_grid(
   align = "hv"
 )
 
+# Export panel c on a larger canvas so the ROC curve, legend, and axis labels
+# remain prominent in the final combined figure.
 save_plot_all_formats(
   plot_obj = fig5c_combined,
-  filename_stem = "fig05c_roc",
+  filename_stem = "Figure_05C_Internal_ROC_final_biomarker",
   dir_path = FIGURE_DIR,
   width = max(FIG_DOUBLE_W, min(3, length(roc_plots)) * FIG_DOUBLE_W),
   height = ceiling(length(roc_plots) / 3) * FIG_DOUBLE_H
@@ -3754,14 +4046,16 @@ save_plot_all_formats(
 
 fig5c_file <- file.path(
   FIGURE_DIR,
-  "fig05c_roc.png"
+  "Figure_05C_Internal_ROC_final_biomarker.png"
 )
+
+# FIGURE 5D. EXPRESSION BOXPLOTS IN TRAINING AND VALIDATION COHORTS
 
 format_p_value <- function(p) {
   if (!is.finite(p)) {
     return("P = NA")
   }
-  
+
   paste0(
     "P = ",
     formatC(p, format = "e", digits = 1)
@@ -3771,22 +4065,22 @@ format_p_value <- function(p) {
 build_long_df <- function(df,
                           dataset_name,
                           genes) {
-  
+
   genes_present <- intersect(
     genes,
     setdiff(colnames(df), c("Sample", "group", "batch"))
   )
-  
+
   if (length(genes_present) < 1) {
     return(data.frame())
   }
-  
+
   tmp <- df[, c("Sample", "group", genes_present), drop = FALSE]
-  
+
   tmp$Group <- make_group_factor(tmp$group)
   tmp$Dataset <- dataset_name
   tmp$group <- NULL
-  
+
   long_df <- tmp %>%
     tidyr::pivot_longer(
       cols = dplyr::all_of(genes_present),
@@ -3805,7 +4099,7 @@ build_long_df <- function(df,
       )
     ) %>%
     dplyr::filter(is.finite(Expression))
-  
+
   as.data.frame(long_df)
 }
 
@@ -3860,13 +4154,13 @@ pval_df <- expr_long %>%
   )
 
 make_gene_boxplot <- function(gene_name) {
-  
+
   df_gene <- expr_long %>%
     dplyr::filter(Gene == gene_name)
-  
+
   stat_gene <- pval_df %>%
     dplyr::filter(Gene == gene_name)
-  
+
   ggplot2::ggplot(
     df_gene,
     ggplot2::aes(
@@ -3951,7 +4245,7 @@ names(gene_plots) <- as.character(final_biomarkers)
 
 for (gene in names(gene_plots)) {
   safe_gene_name <- gsub("[^A-Za-z0-9_\\-]", "_", gene)
-  
+
   save_plot_all_formats(
     plot_obj = gene_plots[[gene]],
     filename_stem = paste0(
@@ -3972,7 +4266,7 @@ fig5d_combined <- cowplot::plot_grid(
 
 save_plot_all_formats(
   plot_obj = fig5d_combined,
-  filename_stem = "fig05d_expr",
+  filename_stem = "Figure_05D_Final_biomarker_expression_boxplots",
   dir_path = FIGURE_DIR,
   width = ifelse(
     length(gene_plots) == 1,
@@ -3988,8 +4282,17 @@ save_plot_all_formats(
 
 fig5d_file <- file.path(
   FIGURE_DIR,
-  "fig05d_expr.png"
+  "Figure_05D_Final_biomarker_expression_boxplots.png"
 )
+# FINAL FIGURE 5: REBUILD PANEL C WITH 4-DECIMAL AUC VALUES + COMBINE A-D
+#
+# This code replaces the previous FINAL COMBINED FIGURE 5 section.
+# It regenerates panel C directly from train_log2CPM.csv and valid_log2CPM.csv,
+# so the legend itself displays:
+#   Training AUC = 0.9712
+#   Validation AUC = 0.9658
+#
+# It then rebuilds the final combined Figure 5 using existing panels A, B and D.
 
 rm(list = intersect(
   c("train_df", "valid_df", "roc_train", "roc_valid", "p_fig5c",
@@ -3999,7 +4302,9 @@ rm(list = intersect(
 
 options(stringsAsFactors = FALSE, scipen = 100)
 
-results_path <- file.path("Results", "ML")
+# 1) PATHS AND REQUIRED PACKAGES
+
+results_path <- "E:/LSCC/Results_LSCC/ML"
 FIGURE_DIR <- results_path
 FONT_FAMILY <- "Arial"
 FIG_DPI <- 600
@@ -4033,6 +4338,8 @@ if (.Platform$OS.type == "windows") {
 
 dir.create(FIGURE_DIR, recursive = TRUE, showWarnings = FALSE)
 
+# 2) HELPER FUNCTIONS
+
 make_group_factor <- function(g) {
   factor(
     ifelse(
@@ -4046,11 +4353,11 @@ make_group_factor <- function(g) {
 
 save_plot_all_formats <- function(plot_obj, filename_stem, dir_path,
                                   width, height) {
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   ggplot2::ggsave(
     filename = png_file,
     plot = plot_obj,
@@ -4060,7 +4367,7 @@ save_plot_all_formats <- function(plot_obj, filename_stem, dir_path,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   ggplot2::ggsave(
     filename = tiff_file,
     plot = plot_obj,
@@ -4071,7 +4378,7 @@ save_plot_all_formats <- function(plot_obj, filename_stem, dir_path,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   ggplot2::ggsave(
     filename = pdf_file,
     plot = plot_obj,
@@ -4081,7 +4388,7 @@ save_plot_all_formats <- function(plot_obj, filename_stem, dir_path,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   invisible(list(PNG = png_file, TIFF = tiff_file, PDF = pdf_file))
 }
 
@@ -4110,7 +4417,7 @@ make_clean_panel_img <- function(path,
   img <- magick::image_read(path)
   img <- magick::image_background(img, FIG_BACKGROUND, flatten = TRUE)
   img <- magick::image_trim(img)
-  
+
   img <- magick::image_resize(
     img,
     geometry = paste0(
@@ -4118,20 +4425,21 @@ make_clean_panel_img <- function(path,
       panel_height - PANEL_CONTENT_VERTICAL_INSET_PX, ">"
     )
   )
-  
+
   img <- magick::image_extent(
     img,
     geometry = paste0(panel_width, "x", panel_height),
     gravity = "center",
     color = FIG_BACKGROUND
   )
-  
+
+  # Every raster-combined panel has the same thin outer black frame.
   img <- magick::image_border(
     img,
     color = "black",
     geometry = paste0(PANEL_BORDER_RASTER_PX, "x", PANEL_BORDER_RASTER_PX)
   )
-  
+
   add_panel_label_img(
     img = img,
     label = label,
@@ -4140,25 +4448,25 @@ make_clean_panel_img <- function(path,
 }
 
 save_magick_all_formats <- function(image_object, filename_stem, dir_path) {
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
   magick::image_write(
     image_object,
     path = png_file,
     format = "png",
     density = paste0(FIG_DPI, "x", FIG_DPI)
   )
-  
+
   magick::image_write(
     image_object,
     path = tiff_file,
     format = "tiff",
     density = paste0(FIG_DPI, "x", FIG_DPI)
   )
-  
+
   try(
     magick::image_write(
       image_object,
@@ -4168,14 +4476,16 @@ save_magick_all_formats <- function(image_object, filename_stem, dir_path) {
     ),
     silent = TRUE
   )
-  
+
   invisible(list(PNG = png_file, TIFF = tiff_file, PDF = pdf_file))
 }
 
+# 3) READ TRAINING AND VALIDATION DATA
+
 gene <- "MYBL2"
 
-train_file <- file.path(results_path, "train_log2.csv")
-valid_file <- file.path(results_path, "valid_log2.csv")
+train_file <- file.path(results_path, "train_log2CPM.csv")
+valid_file <- file.path(results_path, "valid_log2CPM.csv")
 
 required_data_files <- c(train_file, valid_file)
 missing_data_files <- required_data_files[!file.exists(required_data_files)]
@@ -4212,6 +4522,8 @@ if (!all(required_columns %in% colnames(valid_df))) {
 train_group <- make_group_factor(train_df$group)
 valid_group <- make_group_factor(valid_df$group)
 
+# 4) REBUILD PANEL C DIRECTLY FROM THE ORIGINAL DATA
+
 roc_train <- pROC::roc(
   response = train_group,
   predictor = as.numeric(train_df[[gene]]),
@@ -4233,6 +4545,12 @@ validation_auc <- as.numeric(roc_valid$auc)
 
 training_auc_label <- sprintf("Training AUC = %.4f", training_auc)
 validation_auc_label <- sprintf("Validation AUC = %.4f", validation_auc)
+
+# This confirms that the displayed legend will be the requested values
+# with the current data.
+cat("\nPanel C AUC values calculated from the data:\n")
+cat(training_auc_label, "\n")
+cat(validation_auc_label, "\n")
 
 if (
   abs(training_auc - 0.9712) > 0.00005 ||
@@ -4297,9 +4615,10 @@ p_fig5c <- pROC::ggroc(
     legend.key.height = grid::unit(0.45, "cm")
   )
 
+# Save panel C as a genuine plot; no raster text overlay is used.
 save_plot_all_formats(
   plot_obj = p_fig5c,
-  filename_stem = "fig05c_roc",
+  filename_stem = "Figure_05C_Internal_ROC_final_biomarker",
   dir_path = FIGURE_DIR,
   width = 7.2,
   height = 6.5
@@ -4307,22 +4626,24 @@ save_plot_all_formats(
 
 fig5c_file <- file.path(
   FIGURE_DIR,
-  "fig05c_roc.png"
+  "Figure_05C_Internal_ROC_final_biomarker.png"
 )
+
+# 5) REQUIRED EXISTING PANELS A, B, AND D
 
 fig5a_file <- file.path(
   FIGURE_DIR,
-  "fig05a_venn.png"
+  "Figure_05A_Triple_overlap_Venn.png"
 )
 
 fig5b_file <- file.path(
   FIGURE_DIR,
-  "fig05b_lasso.png"
+  "Figure_05B_LASSO_cv_curve.png"
 )
 
 fig5d_file <- file.path(
   FIGURE_DIR,
-  "fig05d_expr.png"
+  "Figure_05D_Final_biomarker_expression_boxplots.png"
 )
 
 final_panel_files <- c(
@@ -4340,6 +4661,8 @@ if (length(missing_panel_files) > 0) {
     paste(missing_panel_files, collapse = "\n")
   )
 }
+
+# 6) FINAL COMBINED FIGURE 5
 
 panel_a_width <- 3000
 panel_b_width <- 4200
@@ -4407,14 +4730,20 @@ fig5_combined_img <- magick::image_background(
 
 save_magick_all_formats(
   image_object = fig5_combined_img,
-  filename_stem = "fig05_screening",
+  filename_stem = "Figure_05_Screening_validation_MYBL2_combined",
   dir_path = FIGURE_DIR
 )
 
-# STEP 09: Run external machine-learning validation and generate Figure 6A.
+cat("\nFINAL FIGURE 5 FINISHED.\n")
+cat("Panel C legend:\n")
+cat(training_auc_label, "\n")
+cat(validation_auc_label, "\n")
+cat("\nOutput folder:\n", FIGURE_DIR, "\n", sep = "")
+
+# Step 09: external machine-learning validation and figure 6a
 
 if (!exists("results_path", inherits = FALSE)) {
-  results_path <- file.path("Results", "ML")
+  results_path <- "E:/LSCC/Results_LSCC/ML"
 }
 
 if (!exists("FIGURE_DIR", inherits = FALSE)) {
@@ -4470,13 +4799,13 @@ if (!exists("to_numeric_df", mode = "function", inherits = FALSE)) {
 if (!exists("coerce_group_12", mode = "function", inherits = FALSE)) {
   coerce_group_12 <- function(g) {
     g0 <- as.character(g)
-    
+
     if (all(g0 %in% c("1", "2"))) {
       return(as.integer(g0))
     }
-    
+
     g_low <- tolower(g0)
-    
+
     if (all(g_low %in% c("normal", "tumor", "non", "lscc", "cancer", "margin"))) {
       return(
         ifelse(
@@ -4486,16 +4815,16 @@ if (!exists("coerce_group_12", mode = "function", inherits = FALSE)) {
         )
       )
     }
-    
+
     u <- sort(unique(g0))
-    
+
     if (length(u) != 2) {
       stop(
         "group must have exactly 2 classes. Found: ",
         paste(u, collapse = ", ")
       )
     }
-    
+
     map <- setNames(c(1L, 2L), u)
     as.integer(map[g0])
   }
@@ -4507,6 +4836,8 @@ if (!exists("make_group_factor", mode = "function", inherits = FALSE)) {
     factor(g12, levels = c(1, 2), labels = c("Normal", "Tumor"))
   }
 }
+
+# Required packages
 
 required_packages <- c(
   "data.table",
@@ -4542,24 +4873,26 @@ suppressPackageStartupMessages({
   library(e1071)
 })
 
+# Restore prior-step output paths when Step 09 is run in a new R session.
+
 if (!exists("step07_dir", inherits = FALSE)) {
   step07_dir <- results_path
 }
 
 if (!exists("train_log2_file", inherits = FALSE)) {
-  train_log2_file <- file.path(results_path, "train_log2.csv")
+  train_log2_file <- file.path(results_path, "train_log2CPM.csv")
 }
 
 if (!exists("external_log2_file", inherits = FALSE)) {
   external_log2_file <- file.path(
     results_path,
-    "ext_log2.csv"
+    "external_GSE130605_log2CPM.csv"
   )
 }
 
 final_biomarkers_file <- file.path(
   step07_dir,
-  "biomarkers.txt"
+  "FINAL_BIOMARKERS.txt"
 )
 
 required_input_files <- c(
@@ -4594,54 +4927,56 @@ if (!exists("test_df", inherits = FALSE)) {
   )
 }
 
-# STEP 09: Run external machine-learning validation and generate Figure 6A.
+# Model configuration and helper functions
 
 step09_dir <- make_stage_dir(9, "External_ML_Figure6A")
 
 RF_NTREE <- 500
 SVM_KERNEL <- "linear"
 
+# Helper functions
+
 scale_by_train <- function(train_mat, new_mat) {
   train_mat <- as.matrix(train_mat)
   new_mat <- as.matrix(new_mat)
-  
+
   mu <- colMeans(train_mat, na.rm = TRUE)
   sdv <- apply(train_mat, 2, sd, na.rm = TRUE)
   sdv[!is.finite(sdv) | sdv == 0] <- 1
-  
+
   sweep(sweep(new_mat, 2, mu, "-"), 2, sdv, "/")
 }
 
 metrics_binary <- function(y_true, y_pred, y_prob) {
   y_true <- factor(y_true, levels = c("Normal", "Tumor"))
   y_pred <- factor(y_pred, levels = c("Normal", "Tumor"))
-  
+
   cm <- table(True = y_true, Pred = y_pred)
-  
+
   TP <- ifelse(
     "Tumor" %in% rownames(cm) && "Tumor" %in% colnames(cm),
     cm["Tumor", "Tumor"],
     0
   )
-  
+
   TN <- ifelse(
     "Normal" %in% rownames(cm) && "Normal" %in% colnames(cm),
     cm["Normal", "Normal"],
     0
   )
-  
+
   FP <- ifelse(
     "Normal" %in% rownames(cm) && "Tumor" %in% colnames(cm),
     cm["Normal", "Tumor"],
     0
   )
-  
+
   FN <- ifelse(
     "Tumor" %in% rownames(cm) && "Normal" %in% colnames(cm),
     cm["Tumor", "Normal"],
     0
   )
-  
+
   accuracy <- (TP + TN) / sum(cm)
   sensitivity <- ifelse((TP + FN) == 0, NA_real_, TP / (TP + FN))
   specificity <- ifelse((TN + FP) == 0, NA_real_, TN / (TN + FP))
@@ -4651,7 +4986,7 @@ metrics_binary <- function(y_true, y_pred, y_prob) {
     NA_real_,
     2 * precision * sensitivity / (precision + sensitivity)
   )
-  
+
   roc_obj <- pROC::roc(
     response = y_true,
     predictor = as.numeric(y_prob),
@@ -4659,7 +4994,7 @@ metrics_binary <- function(y_true, y_pred, y_prob) {
     direction = "<",
     quiet = TRUE
   )
-  
+
   data.frame(
     AUROC = as.numeric(roc_obj$auc),
     Accuracy = as.numeric(accuracy),
@@ -4669,6 +5004,8 @@ metrics_binary <- function(y_true, y_pred, y_prob) {
     F1 = as.numeric(f1)
   )
 }
+
+# Prepare final-biomarker matrix
 
 final_biomarkers <- clean_gene_vector(
   readLines(final_biomarkers_file, warn = FALSE)
@@ -4693,7 +5030,7 @@ if (length(model_genes) < 1) {
 
 write.csv(
   data.frame(Gene = model_genes),
-  file.path(step09_dir, "ext_ml_genes.csv"),
+  file.path(step09_dir, "Genes_used_for_external_ML.csv"),
   row.names = FALSE
 )
 
@@ -4740,6 +5077,8 @@ colnames(test_ml_df) <- make.names(
   unique = TRUE
 )
 
+# Random forest
+
 set.seed(123)
 
 rf_model <- randomForest::randomForest(
@@ -4763,6 +5102,8 @@ rf_pred <- predict(
 
 rf_metrics <- metrics_binary(testY_ml, rf_pred, rf_prob)
 rf_metrics$Model <- "RF"
+
+# Linear support-vector machine
 
 set.seed(123)
 
@@ -4790,6 +5131,8 @@ svm_prob <- if ("Tumor" %in% colnames(svm_prob_mat)) {
 svm_metrics <- metrics_binary(testY_ml, svm_pred, svm_prob)
 svm_metrics$Model <- "SVM"
 
+# External performance table
+
 ml_metrics <- dplyr::bind_rows(
   rf_metrics,
   svm_metrics
@@ -4798,9 +5141,11 @@ ml_metrics <- dplyr::bind_rows(
 
 write.csv(
   ml_metrics,
-  file.path(step09_dir, "ext_ml_metrics.csv"),
+  file.path(step09_dir, "External_GSE130605_ML_metrics.csv"),
   row.names = FALSE
 )
+
+# Figure 6A: RF and SVM external ROC curves
 
 roc_models <- list(
   RF = pROC::roc(
@@ -4878,7 +5223,7 @@ p_fig6a <- pROC::ggroc(
 
 fig6a_file <- file.path(
   step09_dir,
-  "fig06a_ext_ml_roc.png"
+  "Figure_06A_External_validation_RF_SVM_ROC.png"
 )
 
 ggplot2::ggsave(
@@ -4891,3 +5236,5 @@ ggplot2::ggsave(
   limitsize = FALSE
 )
 
+cat("\nSTEP 09 finished: external RF and SVM validation and Figure 6A generated.\n")
+print(ml_metrics)
