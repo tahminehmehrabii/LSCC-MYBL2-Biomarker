@@ -1,4 +1,7 @@
-# STEP 01: Set paths and settings.
+# LSCC high-CNV malignant-cell functional-programme analysis
+# Scores functional programmes and generates Figure 7.
+
+# Step 1: setup, paths, and figure settings
 
 RESET_WORKSPACE_AT_START <- TRUE
 
@@ -6,7 +9,26 @@ if (RESET_WORKSPACE_AT_START) {
   rm(list = ls())
 }
 
-invisible(gc())
+gc()
+
+completed_steps <- character(0)
+
+mark_step_done <- function(step_id) {
+  completed_steps <<- unique(c(completed_steps, step_id))
+  message("\n✓ STEP ", step_id, " completed. Move to the next numbered step.\n")
+}
+
+require_previous_step <- function(required_step, current_step) {
+  if (!(required_step %in% completed_steps)) {
+    stop(
+      "STEP ", current_step,
+      " cannot run yet. First run the complete STEP ",
+      required_step,
+      " section."
+    )
+  }
+}
+
 set.seed(123)
 
 options(
@@ -16,6 +38,8 @@ options(
 )
 
 TARGET_GENE <- "MYBL2"
+
+# Standard manuscript figure settings
 
 FONT_FAMILY <- "Arial"
 FIG_DPI <- 600
@@ -36,10 +60,14 @@ FIG_SINGLE_H <- 4.20
 FIG_DOUBLE_W <- 7.20
 FIG_DOUBLE_H <- 5.40
 
+# Larger final Figure 7 canvas: actual panel content is rendered larger.
 FIGURE7_COMBINED_W <- 16.50
 FIGURE7_COMBINED_H <- 12.20
 
+# Real panel-row allocations. These control how much of the enlarged canvas
+# is assigned to the top-row panels (a/b) and bottom-row panel (c).
 FIGURE7_TOP_ROW_HEIGHT <- 1.15
+# Shorter bottom row removes excess empty framed space around panel c.
 FIGURE7_BOTTOM_ROW_HEIGHT <- 0.82
 
 BASE_TEXT_PT <- 9.5
@@ -50,6 +78,9 @@ LEGEND_TITLE_PT <- 9
 PLOT_TITLE_PT <- 10
 PANEL_TAG_PT <- 14
 
+# Shared visual settings used by every Figure 7 panel.
+# PANEL_BORDER_LWD frames the data region; PANEL_SECTION_BORDER_LWD frames
+# each complete a/b/c section, including its tag and legend.
 PANEL_BORDER_LWD <- 0.45
 PANEL_SECTION_BORDER_LWD <- 0.45
 AXIS_LWD <- 0.40
@@ -57,12 +88,17 @@ TICK_LWD <- 0.40
 GEOM_LWD <- 0.55
 GRID_LWD <- 0.30
 TICK_LENGTH_PT <- 2
+# Smaller inter-component gap leaves more area for actual panel content.
 PANEL_SPACING_PT <- 3
 PANEL_TAG_POSITION <- c(0.045, 0.955)
 
+# Vertical DotPlot settings: one MYBL2 column across all ten subtypes.
+# This replaces the empty single horizontal dot row in panel b.
 VERTICAL_DOTPLOT_X_LIMITS <- c(0.55, 1.45)
 VERTICAL_DOTPLOT_POINT_RANGE <- c(3.0, 14.0)
 
+# Panel-b-only clearance: reserves a clean top-left area for tag b, away from
+# the first y-axis subtype label (Cluster 0).
 PANEL_B_TAG_POSITION <- c(0.018, 0.988)
 PANEL_B_TAG_MARGIN <- ggplot2::margin(
   t = 13,
@@ -72,6 +108,8 @@ PANEL_B_TAG_MARGIN <- ggplot2::margin(
   unit = "pt"
 )
 
+# Panel-a-only clearance: reserves a clean top-left area for tag a, away from
+# the t-SNE embedding and its nearby point labels.
 PANEL_A_TAG_POSITION <- c(0.018, 0.988)
 PANEL_A_TAG_MARGIN <- ggplot2::margin(
   t = 13,
@@ -82,6 +120,7 @@ PANEL_A_TAG_MARGIN <- ggplot2::margin(
 )
 
 HEATMAP_FONT_PT <- 8
+# Heatmap axes and legends follow the same text hierarchy as the other panels.
 HEATMAP_ROW_FONT_PT <- AXIS_TEXT_PT
 HEATMAP_COL_FONT_PT <- AXIS_TEXT_PT
 HEATMAP_LEGEND_FONT_PT <- LEGEND_TEXT_PT
@@ -95,6 +134,8 @@ COL_UP <- COL_TUMOR
 COL_DOWN <- COL_NORMAL
 COL_NS <- "#B8B8B8"
 
+# Reduced shared margin: Figure 7 equivalent of decreasing a raster inset.
+# It gives more of every framed section to its actual plot, axes and legend.
 MANUSCRIPT_MARGIN <- ggplot2::margin(
   t = 3,
   r = 4,
@@ -122,7 +163,8 @@ theme_manuscript <- function(show_grid = FALSE,
         family = FONT_FAMILY,
         color = "black"
       ),
-      
+
+      # All panel titles use the same font, bold state, size, and placement.
       plot.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -132,7 +174,8 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.title.position = "panel",
-      
+
+      # All panel tags use the same Arial-bold style and top-left inset position.
       plot.tag = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -142,7 +185,8 @@ theme_manuscript <- function(show_grid = FALSE,
         color = "black"
       ),
       plot.tag.position = PANEL_TAG_POSITION,
-      
+
+      # All axis lines, ticks, and number labels follow the same standard.
       axis.title = ggplot2::element_text(
         family = FONT_FAMILY,
         face = "bold",
@@ -163,7 +207,8 @@ theme_manuscript <- function(show_grid = FALSE,
         linewidth = TICK_LWD
       ),
       axis.ticks.length = grid::unit(TICK_LENGTH_PT, "pt"),
-      
+
+      # All legends use identical typography, key size, and spacing.
       legend.position = legend_position,
       legend.title = ggplot2::element_text(
         family = FONT_FAMILY,
@@ -188,7 +233,10 @@ theme_manuscript <- function(show_grid = FALSE,
       legend.key.height = grid::unit(0.38, "cm"),
       legend.box.margin = LEGEND_BOX_MARGIN,
       legend.box.spacing = grid::unit(PANEL_SPACING_PT, "pt"),
-      
+
+      # Each complete panel section receives an outer black frame, while the
+      # data area keeps its inner thin black frame. The outer frame encloses
+      # the panel tag, axes, plot, titles, and legends as one clear section.
       panel.background = ggplot2::element_rect(
         fill = FIG_BACKGROUND,
         color = NA
@@ -203,7 +251,7 @@ theme_manuscript <- function(show_grid = FALSE,
         fill = NA,
         linewidth = PANEL_BORDER_LWD
       ),
-      
+
       panel.grid.major = if (show_grid) {
         ggplot2::element_line(
           color = "grey92",
@@ -213,19 +261,27 @@ theme_manuscript <- function(show_grid = FALSE,
         ggplot2::element_blank()
       },
       panel.grid.minor = ggplot2::element_blank(),
-      
+
+      # Equal internal panel margin and distance between panels.
       panel.spacing = grid::unit(PANEL_SPACING_PT, "pt"),
       plot.margin = MANUSCRIPT_MARGIN
     )
 }
 
+# Figure 7 layout settings.
+# Panel b receives more width because the MYBL2 DotPlot is now vertical;
+# panel a remains large enough for a readable t-SNE embedding.
 TSNE_PANEL_WIDTH <- 1.20
 MYBL2_PANEL_WIDTH <- 0.80
 
+# Panel c is intentionally narrower than the full figure and centered between
+# two empty spacers, so the heatmap no longer looks excessively stretched.
 PANEL_C_LEFT_SPACER_WIDTH <- 0.35
 PANEL_C_HEATMAP_WIDTH <- 1.30
 PANEL_C_RIGHT_SPACER_WIDTH <- 0.35
 
+# Panel-c-only clearance: reserves a clean top-left area for tag c, away from
+# the first y-axis programme label ("Stress response").
 PANEL_C_TAG_POSITION <- c(0.018, 0.988)
 PANEL_C_TAG_MARGIN <- ggplot2::margin(
   t = 13,
@@ -235,6 +291,7 @@ PANEL_C_TAG_MARGIN <- ggplot2::margin(
   unit = "pt"
 )
 
+# Existing High-CNV clustering is preserved exactly as previously defined.
 RESOLUTION_MALIGNANT_FROM_PREVIOUS_PIPELINE <- 0.5
 
 FIXED_CLUSTER_ORDER <- c(
@@ -243,8 +300,12 @@ FIXED_CLUSTER_ORDER <- c(
   "Cluster 10", "Cluster 11"
 )
 
+# Panel c is intentionally restricted to these two High-CNV malignant subclusters.
+# Panels a and b continue to display all ten existing subclusters.
 PANEL_C_CLUSTER_ORDER <- c("Cluster 0", "Cluster 8")
 
+# Publication-ready labels for the functional-programme heatmap.
+# The order is defined from bottom to top on the y-axis.
 PROGRAMME_DISPLAY_ORDER <- c(
   "DNA repair",
   "E2F targets",
@@ -265,29 +326,43 @@ OUTPUT_DIR <- file.path(
   "Functional"
 )
 
+PROGRAMME_INTERPRETATION_NOTE <- file.path(
+  OUTPUT_DIR,
+  "Functional_programme_interpretation_note.txt"
+)
+
 dir.create(
   OUTPUT_DIR,
   recursive = TRUE,
   showWarnings = FALSE
 )
 
+# Delete only prior versions of the functional Figure 7.
 CLEAN_OLD_FUNCTIONAL_FIGURES <- TRUE
 
 if (CLEAN_OLD_FUNCTIONAL_FIGURES) {
   old_functional_figure_files <- list.files(
     OUTPUT_DIR,
-    pattern = "^fig07_functional[.](png|tiff|pdf)$",
+    pattern = "^Figure_07_HighCNV_MYBL2_functional_programmes[.](png|tiff|pdf)$",
     full.names = TRUE,
     ignore.case = TRUE
   )
-  
+
   if (length(old_functional_figure_files) > 0) {
     unlink(old_functional_figure_files, force = TRUE)
   }
 }
 
+# Optional direct paths. Keep NA unless automatic detection fails.
 HIGHCNV_OBJECT_RDS_OVERRIDE <- NA_character_
 HIGHCNV_DE_OBJECT_RDS_OVERRIDE <- NA_character_
+
+mark_step_done("01.1")
+
+# Step 2: detect completed prior-pipeline rds files
+
+require_previous_step("01.1", "01.2")
+
 candidate_rds_dirs <- c(
   file.path(
     SC_PROJECT_DIR,
@@ -311,7 +386,7 @@ detect_file <- function(override, candidates, label) {
         override
       )
     }
-    
+
     return(
       normalizePath(
         override,
@@ -320,9 +395,9 @@ detect_file <- function(override, candidates, label) {
       )
     )
   }
-  
+
   found <- candidates[file.exists(candidates)]
-  
+
   if (length(found) == 0) {
     stop(
       label,
@@ -330,7 +405,7 @@ detect_file <- function(override, candidates, label) {
       paste(candidates, collapse = "\n")
     )
   }
-  
+
   normalizePath(
     found[1],
     winslash = "/",
@@ -355,7 +430,27 @@ HIGHCNV_DE_OBJECT_RDS <- detect_file(
   ),
   "HIGH_CNV_MALIGNANT_object_DE_fixed.rds"
 )
-# STEP 02: Load packages.
+
+writeLines(
+  c(
+    "Input provenance",
+    paste0(
+      "Existing malignant-clustering resolution retained: ",
+      RESOLUTION_MALIGNANT_FROM_PREVIOUS_PIPELINE
+    ),
+    paste0("High-CNV object: ", HIGHCNV_OBJECT_RDS),
+    paste0("High-CNV DE object: ", HIGHCNV_DE_OBJECT_RDS),
+    paste0("Output directory: ", OUTPUT_DIR),
+    "No upstream single-cell processing was rerun."
+  ),
+  file.path(OUTPUT_DIR, "Functional_programme_input_provenance.txt")
+)
+
+mark_step_done("01.2")
+
+# Step 3: package check and loading
+
+require_previous_step("01.2", "01.3")
 
 REQUIRED_PACKAGES <- c(
   "Seurat",
@@ -397,7 +492,36 @@ suppressPackageStartupMessages({
   library(tibble)
   library(msigdbr)
 })
-# STEP 03: Define helper functions.
+
+writeLines(
+  c(
+    "Required packages were found and loaded successfully.",
+    paste0("R: ", R.version.string),
+    paste0(
+      "Packages: ",
+      paste(
+        paste0(
+          REQUIRED_PACKAGES,
+          " (",
+          vapply(
+            REQUIRED_PACKAGES,
+            function(pkg) as.character(utils::packageVersion(pkg)),
+            character(1)
+          ),
+          ")"
+        ),
+        collapse = "; "
+      )
+    )
+  ),
+  file.path(OUTPUT_DIR, "Functional_programme_package_versions.txt")
+)
+
+mark_step_done("01.3")
+
+# Step 4: helper functions
+
+require_previous_step("01.3", "01.4")
 
 save_plot_all_formats <- function(plot_obj,
                                   filename_stem,
@@ -407,23 +531,24 @@ save_plot_all_formats <- function(plot_obj,
   is_full_path <- grepl("^[A-Za-z]:", filename_stem) ||
     startsWith(filename_stem, "/") ||
     startsWith(filename_stem, "~")
-  
+
   if (is_full_path) {
     dir_path <- dirname(filename_stem)
     filename_stem <- basename(filename_stem)
   }
-  
+
   filename_stem <- sub("\\.(png|tiff|pdf)$", "", filename_stem, ignore.case = TRUE)
   dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
-  
+
   if (!dir.exists(dir_path)) {
     stop("Could not create the output directory:\n", dir_path)
   }
-  
+
   png_file <- file.path(dir_path, paste0(filename_stem, ".png"))
   tiff_file <- file.path(dir_path, paste0(filename_stem, ".tiff"))
   pdf_file <- file.path(dir_path, paste0(filename_stem, ".pdf"))
-  
+
+  # PNG: 600 dpi
   ggplot2::ggsave(
     filename = png_file,
     plot = plot_obj,
@@ -433,7 +558,8 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
+  # TIFF: 600 dpi with LZW compression
   ggplot2::ggsave(
     filename = tiff_file,
     plot = plot_obj,
@@ -444,13 +570,14 @@ save_plot_all_formats <- function(plot_obj,
     compression = "lzw",
     limitsize = FALSE
   )
-  
+
+  # PDF: vector version
   pdf_device <- if (capabilities("cairo")) {
     grDevices::cairo_pdf
   } else {
     grDevices::pdf
   }
-  
+
   ggplot2::ggsave(
     filename = pdf_file,
     plot = plot_obj,
@@ -460,7 +587,7 @@ save_plot_all_formats <- function(plot_obj,
     bg = FIG_BACKGROUND,
     limitsize = FALSE
   )
-  
+
   invisible(
     list(
       PNG = png_file,
@@ -475,11 +602,11 @@ meta_with_cell_id <- function(meta) {
     meta,
     stringsAsFactors = FALSE
   )
-  
+
   if ("Cell" %in% colnames(x)) {
     x$Cell <- NULL
   }
-  
+
   tibble::rownames_to_column(
     x,
     var = "Cell"
@@ -493,23 +620,23 @@ get_existing_layer <- function(object, assay, layer = "data") {
       assay
     )
   }
-  
+
   DefaultAssay(object) <- assay
-  
+
   assay_obj <- object[[assay]]
-  
+
   layer_names <- tryCatch(
     SeuratObject::Layers(assay_obj),
     error = function(e) character(0)
   )
-  
+
   matching_layers <- layer_names[
     grepl(
       paste0("^", layer, "(\\.|$)"),
       layer_names
     )
   ]
-  
+
   if (length(matching_layers) == 0) {
     legacy_layer <- tryCatch(
       Seurat::GetAssayData(
@@ -519,11 +646,11 @@ get_existing_layer <- function(object, assay, layer = "data") {
       ),
       error = function(e) NULL
     )
-    
+
     if (!is.null(legacy_layer) && ncol(legacy_layer) > 0) {
       return(as(legacy_layer, "dgCMatrix"))
     }
-    
+
     stop(
       "No usable ",
       layer,
@@ -531,9 +658,9 @@ get_existing_layer <- function(object, assay, layer = "data") {
       assay
     )
   }
-  
+
   layer_matrices <- list()
-  
+
   for (layer_name in matching_layers) {
     current_matrix <- tryCatch(
       SeuratObject::LayerData(
@@ -544,11 +671,11 @@ get_existing_layer <- function(object, assay, layer = "data") {
       ),
       error = function(e) NULL
     )
-    
+
     if (is.null(current_matrix) || ncol(current_matrix) == 0) {
       next
     }
-    
+
     if (
       length(intersect(
         rownames(current_matrix),
@@ -561,12 +688,12 @@ get_existing_layer <- function(object, assay, layer = "data") {
     ) {
       current_matrix <- Matrix::t(current_matrix)
     }
-    
+
     retained_cells <- intersect(
       colnames(current_matrix),
       colnames(object)
     )
-    
+
     if (length(retained_cells) > 0) {
       layer_matrices[[layer_name]] <- current_matrix[
         ,
@@ -575,7 +702,7 @@ get_existing_layer <- function(object, assay, layer = "data") {
       ]
     }
   }
-  
+
   if (length(layer_matrices) == 0) {
     stop(
       "No valid ",
@@ -583,12 +710,12 @@ get_existing_layer <- function(object, assay, layer = "data") {
       " layers could be extracted."
     )
   }
-  
+
   common_genes <- Reduce(
     intersect,
     lapply(layer_matrices, rownames)
   )
-  
+
   if (length(common_genes) < 2) {
     stop(
       "Too few shared genes across ",
@@ -596,7 +723,7 @@ get_existing_layer <- function(object, assay, layer = "data") {
       " layers."
     )
   }
-  
+
   layer_matrices <- lapply(
     layer_matrices,
     function(x) {
@@ -607,29 +734,29 @@ get_existing_layer <- function(object, assay, layer = "data") {
       ]
     }
   )
-  
+
   joined_matrix <- do.call(
     cbind,
     layer_matrices
   )
-  
+
   joined_matrix <- joined_matrix[
     ,
     !duplicated(colnames(joined_matrix)),
     drop = FALSE
   ]
-  
+
   final_cells <- intersect(
     colnames(object),
     colnames(joined_matrix)
   )
-  
+
   joined_matrix <- joined_matrix[
     ,
     final_cells,
     drop = FALSE
   ]
-  
+
   if (ncol(joined_matrix) < 2) {
     stop(
       "Fewer than two cells remained after joining ",
@@ -637,25 +764,25 @@ get_existing_layer <- function(object, assay, layer = "data") {
       " layers."
     )
   }
-  
+
   as(joined_matrix, "dgCMatrix")
 }
 
 get_reduction_name <- function(object) {
   available_reductions <- Reductions(object)
-  
+
   if ("tsne" %in% available_reductions) {
     return("tsne")
   }
-  
+
   if ("umap" %in% available_reductions) {
     return("umap")
   }
-  
+
   if ("pca" %in% available_reductions) {
     return("pca")
   }
-  
+
   stop(
     "No t-SNE, UMAP, or PCA reduction was found in the saved High-CNV object."
   )
@@ -671,11 +798,11 @@ program_z_score_table <- function(
       unique(gene_set),
       rownames(data_mat)
     )
-    
+
     if (length(retained_genes) < min_genes) {
       return(rep(NA_real_, ncol(data_mat)))
     }
-    
+
     x <- as.matrix(
       data_mat[
         retained_genes,
@@ -683,60 +810,60 @@ program_z_score_table <- function(
         drop = FALSE
       ]
     )
-    
+
     gene_means <- rowMeans(
       x,
       na.rm = TRUE
     )
-    
+
     gene_sds <- apply(
       x,
       1,
       stats::sd,
       na.rm = TRUE
     )
-    
+
     valid_genes <- is.finite(gene_means) &
       is.finite(gene_sds) &
       gene_sds > 0
-    
+
     if (sum(valid_genes) < min_genes) {
       return(rep(NA_real_, ncol(data_mat)))
     }
-    
+
     z <- sweep(
       x[valid_genes, , drop = FALSE],
       1,
       gene_means[valid_genes],
       "-"
     )
-    
+
     z <- sweep(
       z,
       1,
       gene_sds[valid_genes],
       "/"
     )
-    
+
     colMeans(
       z,
       na.rm = TRUE
     )
   })
-  
+
   result <- as.data.frame(
     result,
     check.names = FALSE
   )
-  
+
   rownames(result) <- colnames(data_mat)
-  
+
   result
 }
 
 cluster_number <- function(x) {
   x <- as.character(x)
-  
+
   output <- suppressWarnings(
     as.integer(
       sub(
@@ -746,14 +873,14 @@ cluster_number <- function(x) {
       )
     )
   )
-  
+
   output[
     !grepl(
       "[0-9]+\\s*$",
       x
     )
   ] <- NA_integer_
-  
+
   output
 }
 
@@ -764,7 +891,12 @@ normalise_cluster_label <- function(x) {
   output[!is.na(numbers)] <- paste0("Cluster ", numbers[!is.na(numbers)])
   output
 }
-# STEP 04: Load High-CNV objects.
+
+mark_step_done("01.4")
+
+# Step 5: load and validate existing high-cnv objects
+
+require_previous_step("01.4", "01.5")
 
 highcnv_obj <- readRDS(HIGHCNV_OBJECT_RDS)
 highcnv_de_obj <- readRDS(HIGHCNV_DE_OBJECT_RDS)
@@ -940,6 +1072,8 @@ if (!(TARGET_GENE %in% rownames(malignant_data))) {
   )
 }
 
+# Use the original High-CNV object exclusively for the pre-existing embedding,
+# while using the DE object for expression-based downstream analyses.
 highcnv_embedding_obj <- subset(
   highcnv_obj,
   cells = colnames(highcnv_analysis_obj)
@@ -960,7 +1094,40 @@ highcnv_embedding_obj$Malignant_subcluster <- factor(
 if (any(is.na(highcnv_embedding_obj$Malignant_subcluster))) {
   stop("Embedding metadata could not be aligned to the fixed High-CNV subcluster order.")
 }
-# STEP 05: Score functional programmes.
+
+writeLines(
+  c(
+    "Existing-cluster continuity passed.",
+    paste0(
+      "Retained High-CNV cells: ",
+      ncol(highcnv_analysis_obj)
+    ),
+    paste0(
+      "Existing High-CNV subclusters: ",
+      paste(
+        levels(
+          highcnv_analysis_obj$Malignant_subcluster
+        ),
+        collapse = ", "
+      )
+    ),
+    paste0(
+      "Expression assay used: ",
+      MALIGNANT_ASSAY
+    ),
+    "No FindClusters or FindAllMarkers operation was run in this script."
+  ),
+  file.path(
+    OUTPUT_DIR,
+    "Existing_cluster_continuity.txt"
+  )
+)
+
+mark_step_done("01.5")
+
+# Step 6: functional programmes and figure 7
+
+require_previous_step("01.5", "01.6")
 
 hallmark <- tryCatch(
   msigdbr::msigdbr(
@@ -1057,7 +1224,7 @@ program_gene_set_export <- do.call(
 
 write.csv(
   program_gene_set_export,
-  file.path(OUTPUT_DIR, "prog_genes.csv"),
+  file.path(OUTPUT_DIR, "Functional_programme_gene_sets_used.csv"),
   row.names = FALSE
 )
 
@@ -1100,7 +1267,7 @@ program_cols <- grep(
   value = TRUE
 )
 
-cluster_program <- highcnv_meta %>%
+program_summary <- highcnv_meta %>%
   dplyr::group_by(Malignant_subcluster) %>%
   dplyr::summarise(
     Cells = dplyr::n(),
@@ -1122,11 +1289,15 @@ cluster_program <- highcnv_meta %>%
 
 write.csv(
   highcnv_meta,
-  file.path(OUTPUT_DIR, "cell_prog.csv"),
+  file.path(OUTPUT_DIR, "HighCNV_cell_metadata_MYBL2_programZ.csv"),
   row.names = FALSE
 )
 
-# STEP 06: Build Figure 7.
+write.csv(
+  program_summary,
+  file.path(OUTPUT_DIR, "HighCNV_subcluster_programZ_summary.csv"),
+  row.names = FALSE
+)
 
 existing_reduction <- get_reduction_name(highcnv_embedding_obj)
 
@@ -1142,6 +1313,8 @@ reduction_y <- ifelse(
   ifelse(existing_reduction == "umap", "UMAP 2", "PC 2")
 )
 
+# Figure 7a: Existing High-CNV subtype embedding.
+# The automatic technical title generated by DimPlot is explicitly removed.
 p_subclusters <- DimPlot(
   highcnv_embedding_obj,
   reduction = existing_reduction,
@@ -1160,6 +1333,8 @@ p_subclusters <- DimPlot(
     plot.title = element_blank()
   )
 
+# Figure 7b: MYBL2 DotPlot. Seurat::DotPlot calculates average expression and
+# percent expressed; it is redrawn here for the manuscript layout.
 mybl2_dot_raw <- Seurat::DotPlot(
   highcnv_analysis_obj,
   features = TARGET_GENE,
@@ -1175,7 +1350,7 @@ mybl2_dot_data <- mybl2_dot_raw$data %>%
     pct.exp = as.numeric(pct.exp)
   ) %>%
   dplyr::left_join(
-    cluster_program %>%
+    program_summary %>%
       dplyr::transmute(
         cluster_label = as.character(Malignant_subcluster),
         Mean_MYBL2
@@ -1198,7 +1373,7 @@ if (nrow(mybl2_dot_data) != length(FIXED_CLUSTER_ORDER)) {
 
 write.csv(
   mybl2_dot_data,
-  file.path(OUTPUT_DIR, "mybl2_dot.csv"),
+  file.path(OUTPUT_DIR, "Figure_7B_MYBL2_DotPlot_data.csv"),
   row.names = FALSE
 )
 
@@ -1216,6 +1391,8 @@ p_mybl2_only <- ggplot(
     ),
     alpha = 0.95
   ) +
+  # One MYBL2 column is displayed vertically across all ten subtypes, using
+  # the full height of panel b rather than one short horizontal row of dots.
   scale_x_continuous(
     breaks = 1,
     labels = TARGET_GENE,
@@ -1238,6 +1415,8 @@ p_mybl2_only <- ggplot(
     na.value = "grey85"
   ) +
   guides(
+    # Compact legends at the right keep panel b tall and prevent a wide,
+    # visually heavy legend strip below the DotPlot.
     size = guide_legend(
       order = 1,
       direction = "vertical",
@@ -1285,7 +1464,7 @@ p_mybl2_only <- ggplot(
     legend.margin = ggplot2::margin(0, 0, 0, 0, unit = "pt")
   )
 
-program_long_all <- cluster_program %>%
+summary_long_all <- program_summary %>%
   tidyr::pivot_longer(
     cols = dplyr::all_of(program_cols),
     names_to = "Program",
@@ -1316,7 +1495,7 @@ program_long_all <- cluster_program %>%
   )
 
 programme_scale_limit <- max(
-  abs(program_long_all$Mean_program_Z),
+  abs(summary_long_all$Mean_program_Z),
   na.rm = TRUE
 )
 
@@ -1386,7 +1565,10 @@ make_programme_heatmap <- function(heatmap_data, x_title) {
     )
 }
 
-program_long_c <- program_long_all %>%
+# Figure 7c: descriptive functional-programme comparison for Cluster 0 and
+# Cluster 8 only. The programme Z-score scale remains based on all ten
+# subclusters so colours remain comparable with the full analysis.
+summary_long_panel_c <- summary_long_all %>%
   dplyr::filter(
     as.character(Malignant_subcluster) %in% PANEL_C_CLUSTER_ORDER
   ) %>%
@@ -1398,29 +1580,46 @@ program_long_c <- program_long_all %>%
   )
 
 if (!setequal(
-  unique(as.character(program_long_c$Malignant_subcluster)),
+  unique(as.character(summary_long_panel_c$Malignant_subcluster)),
   PANEL_C_CLUSTER_ORDER
 )) {
   stop(
-    "Panel c could not retain exactly the requested subclusters: ",
+    "Panel c could not retain the expected subclusters: ",
     paste(PANEL_C_CLUSTER_ORDER, collapse = ", ")
   )
 }
 
 write.csv(
-  program_long_c,
+  summary_long_panel_c,
   file.path(
     OUTPUT_DIR,
-    "prog_heatmap_c0_c8.csv"
+    "Figure_7C_functional_programme_heatmap_Cluster0_Cluster8_data.csv"
   ),
   row.names = FALSE
 )
 
 p_programs <- make_programme_heatmap(
-  program_long_c,
+  summary_long_panel_c,
   x_title = "High-CNV malignant subtype"
 )
 
+writeLines(
+  c(
+    "Functional programme interpretation note",
+    "Programme heatmaps show descriptive, relative gene-wise Z-score averages at the subcluster level.",
+    "They are not inferential statistical tests; do not describe programme differences as statistically significant without a separate sample-level or pseudobulk analysis.",
+    "The Stress_response, Senescence_like, and Epithelial_differentiation programmes are curated custom gene sets.",
+    "The exact genes used for every programme are exported in Functional_programme_gene_sets_used.csv."
+  ),
+  PROGRAMME_INTERPRETATION_NOTE
+)
+
+# Figure 7 has no in-image title. Panel letters are placed directly inside their
+# own panels, so a, b, and c share the same font, size, and top-left inset.
+# plot.background adds an outer thin black frame to each complete panel section,
+# creating visible divisions between panels a, b, and c.
+# Panel a alone gets a dedicated top-left clearance zone so tag a remains
+# separate from the t-SNE embedding and the nearby cluster labels.
 p_subclusters_tagged <- p_subclusters +
   ggplot2::labs(tag = "a") +
   ggplot2::theme(
@@ -1428,6 +1627,8 @@ p_subclusters_tagged <- p_subclusters +
     plot.margin = PANEL_A_TAG_MARGIN
   )
 
+# Panel b alone gets a dedicated top-left clearance zone so tag b does not
+# overlap the Cluster 0 y-axis label.
 p_mybl2_only_tagged <- p_mybl2_only +
   ggplot2::labs(tag = "b") +
   ggplot2::theme(
@@ -1435,6 +1636,8 @@ p_mybl2_only_tagged <- p_mybl2_only +
     plot.margin = PANEL_B_TAG_MARGIN
   )
 
+# Panel c alone gets a larger top/left margin and a dedicated tag position.
+# This prevents the c tag from overlapping the top programme label.
 p_programs_tagged <- p_programs +
   ggplot2::labs(tag = "c") +
   ggplot2::theme(
@@ -1450,6 +1653,8 @@ top_row_7 <- (
     widths = c(TSNE_PANEL_WIDTH, MYBL2_PANEL_WIDTH)
   )
 
+# Panel c is centered and deliberately narrower than the full figure.
+# The spacers have no border; only the heatmap itself remains framed as panel c.
 bottom_row_7 <- (
   patchwork::plot_spacer() |
     p_programs_tagged |
@@ -1473,23 +1678,77 @@ figure_7 <- (
 
 save_plot_all_formats(
   plot_obj = figure_7,
-  filename_stem = "fig07_functional",
+  filename_stem = "Figure_07_HighCNV_MYBL2_functional_programmes",
   dir_path = OUTPUT_DIR,
   width = FIGURE7_COMBINED_W,
   height = FIGURE7_COMBINED_H
 )
-# STEP 07: Save final objects.
+
+mark_step_done("01.6")
+
+# Step 7: export objects and final status
+
+require_previous_step("01.6", "01.7")
 
 saveRDS(
   list(
     highcnv_analysis_object = highcnv_analysis_obj,
     highcnv_metadata = highcnv_meta,
-    cluster_program = cluster_program,
+    programZ_summary = program_summary,
     mybl2_dotplot_data = mybl2_dot_data,
     programme_gene_sets = program_gene_set_export
   ),
   file.path(
     OUTPUT_DIR,
-    "functional_obj.rds"
+    "Functional_Programme_Objects.rds"
   )
+)
+
+summary_lines <- c(
+  "Functional programme analysis completed.",
+  paste0(
+    "Existing clustering resolution retained: ",
+    RESOLUTION_MALIGNANT_FROM_PREVIOUS_PIPELINE
+  ),
+  paste0(
+    "High-CNV cells analysed: ",
+    ncol(highcnv_analysis_obj)
+  ),
+  paste0(
+    "Existing High-CNV subclusters: ",
+    paste(
+      levels(highcnv_analysis_obj$Malignant_subcluster),
+      collapse = ", "
+    )
+  ),
+  "Figure 7a: High-CNV malignant-subcluster embedding.",
+  "Figure 7b: MYBL2 DotPlot across all High-CNV subclusters.",
+  "Figure 7c: descriptive functional-programme heatmap for Cluster 0 and Cluster 8 only.",
+  "Functional programmes were gene-wise Z-scored before averaging and are descriptive, not inferential statistical comparisons.",
+  "Custom programme gene sets: Stress_response, Senescence_like, and Epithelial_differentiation; exact genes are exported separately."
+)
+
+writeLines(
+  summary_lines,
+  file.path(OUTPUT_DIR, "Functional_Programme_Analysis_summary.txt")
+)
+
+writeLines(
+  capture.output(sessionInfo()),
+  file.path(OUTPUT_DIR, "Functional_Programme_sessionInfo.txt")
+)
+
+cat("\n============================================================\n")
+cat("FUNCTIONAL PROGRAMME ANALYSIS FINISHED\n")
+cat("============================================================\n")
+cat("All outputs: ", OUTPUT_DIR, "\n", sep = "")
+cat("Figure 7: Figure_07_HighCNV_MYBL2_functional_programmes.{png,tiff,pdf}\n")
+cat("============================================================\n")
+
+mark_step_done("01.7")
+
+message(
+  "All numbered steps finished. Outputs are in: ",
+  OUTPUT_DIR,
+  "\nFigure 7 includes all ten High-CNV malignant subtypes in panels a-b; panel c includes Cluster 0 and Cluster 8 only."
 )
