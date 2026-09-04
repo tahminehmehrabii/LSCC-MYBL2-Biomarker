@@ -4,6 +4,10 @@ This repository contains analysis scripts used in the study:
 
 This repository contains the **R code** used for the reproducible analysis of **MYBL2 in lung squamous cell carcinoma (LSCC)**.
 
+## Workflow Overview
+
+![LSCC MYBL2 Biomarker Analysis](image/Slide1.PNG)
+
 ## Main Analysis Workflow
 
 Run the primary analyses in the following order.
